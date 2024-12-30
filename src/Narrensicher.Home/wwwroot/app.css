@@ -1,0 +1,39 @@
+html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+a, .btn-link {
+    color: #bb86fc;
+}
+
+.btn-primary {
+    color: #121212;
+    background-color: #bb86fc;
+    border-color: #3700b3;
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem #bb86fc, 0 0 0 0.25rem #3700b3;
+}
+
+.content {
+    padding-top: 1.1rem;
+}
+
+h1:focus {
+    outline: none;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #03dac6;
+}
+
+.invalid {
+    outline: 1px solid #cf6679;
+}
+
+.validation-message {
+    color: #cf6679;
+}
