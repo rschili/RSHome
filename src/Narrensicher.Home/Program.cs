@@ -2,17 +2,28 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using System.Security.Cryptography.X509Certificates;
-using Narrensicher.Home;
+using Narrensicher.Home.Services;
 
 Console.WriteLine("Loading variables...");
-Config config = Config.LoadFromEnvFile();
+var config = Config.LoadFromEnvFile();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging
-    .AddSimpleConsole()
-    .SetMinimumLevel(LogLevel.Warning);
+    .ClearProviders()
+    .AddSimpleConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.SingleLine = false;
+        options.TimestampFormat = "hh:mm:ss ";
+        options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Enabled;
+    })
+    .SetMinimumLevel(LogLevel.Warning)
+    .AddSeq(config.SeqUrl, config.SeqApiKey)
+    .AddFilter("Narrensicher.Home.Services.DiscordWorkerService",LogLevel.Debug);
 builder.Services
     .AddSingleton(config)
+    .AddHttpClient()
+    .AddHostedService<DiscordWorkerService>()
     .AddRazorPages();
 builder.Services
     .AddAntiforgery()

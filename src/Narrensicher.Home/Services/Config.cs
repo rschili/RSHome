@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Narrensicher.Home;
+namespace Narrensicher.Home.Services;
 public enum EnvVar
 {
     DISCORD_TOKEN,
