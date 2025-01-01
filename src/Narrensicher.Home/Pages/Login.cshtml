@@ -1,0 +1,20 @@
+﻿@page
+@model LoginModel
+
+@if(!User.Identity?.IsAuthenticated == true)
+{
+<h4>Weiter geht es nur mit Passwort.</h4>
+<form method="post">
+    <fieldset class="grid">
+        <input type="text" asp-for="Username" placeholder="Benutzer" autoComplete="username" />
+        <input type="password" asp-for="Password" placeholder="Passwort" autoComplete="current-password" />
+        <button type="submit">Einloggen</button>
+    </fieldset>
+    <fieldset><label><input asp-for="AcceptTerms"/>Ich stimme dem dem Setzen notwendiger Cookies zu.</label>
+    </fieldset>
+</form>
+}
+else
+{
+    <h4>Willkommen, @User.Identity?.Name! Sie sind bereits eingeloggt.</h4>
+}

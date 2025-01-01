@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "4422:4422"
+    volumes:
+      - chatbot-data:/data
+    environment:
+      DISCORD_TOKEN: ""
+      DISCORD_ADMIN_ID: ""
+      OPENAI_API_KEY: ""
+      SEQ_API_KEY: ""
+      SEQ_URL: ""
+
+volumes:
+  chatbot-data:
