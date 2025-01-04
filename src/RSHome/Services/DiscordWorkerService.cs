@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 
-namespace Narrensicher.Home.Services;
+namespace RSHome.Services;
 
 public class DiscordWorkerService : BackgroundService
 {

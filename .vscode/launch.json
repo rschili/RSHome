@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C#: Narrensicher.Home [Default Configuration]",
+            "name": "C#: RSHome [Default Configuration]",
             "type": "dotnet",
             "request": "launch",
-            "projectPath": "${workspaceFolder}\\src\\Narrensicher.Home\\Narrensicher.Home.csproj"
+            "projectPath": "${workspaceFolder}\\src\\RSHome\\RSHome.csproj"
         }
     ]
 }
