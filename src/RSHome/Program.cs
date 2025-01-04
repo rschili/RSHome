@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using System.Security.Cryptography.X509Certificates;
-using Narrensicher.Home.Services;
+using RSHome.Services;
+using Microsoft.AspNetCore.Builder;
+using System.Text;
 
 Console.WriteLine("Loading variables...");
 var config = Config.LoadFromEnvFile();
@@ -19,12 +21,12 @@ builder.Logging
     })
     .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey)
-    .AddFilter("Narrensicher.Home.Services.DiscordWorkerService",LogLevel.Debug);
+    .AddFilter("RSHome.Services.DiscordWorkerService",LogLevel.Debug);
 builder.Services
     .AddSingleton(config)
     .AddHttpClient()
     .AddHostedService<DiscordWorkerService>()
-    .AddRazorPages();
+    .AddRazorPages().WithRazorPagesRoot("/Pages");
 builder.Services
     .AddAntiforgery()
     //.AddHealthChecks();
@@ -40,7 +42,7 @@ builder.Services
 builder.Services
     .AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(config.WebKeyStore))
-    .SetApplicationName("Narrensicher.Home");
+    .SetApplicationName("RSHome");
 
 builder.Services.AddAuthorizationBuilder().AddPolicy("admin", policy => policy.RequireRole("admin"));
 
@@ -56,22 +58,26 @@ builder.WebHost.ConfigureKestrel(options =>
 
 using var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-app.Use(async (context, next) =>
-{
-    await next.Invoke();
-    if(context.Response.StatusCode >= 400)
-        logger.LogWarning("{Method} for {Path} from {IP} resulted in HTTP {StatusCode}",
-            context.Request.Method, context.Request.Path, context.Connection.RemoteIpAddress, context.Response.StatusCode);
-});
+app
+    .Use(async (context, next) =>
+    {
+        await next.Invoke();
+        if(context.Response.StatusCode >= 400)
+            logger.LogWarning("{Method} for {Path} from {IP} resulted in HTTP {StatusCode}",
+                context.Request.Method, context.Request.Path, context.Connection.RemoteIpAddress, context.Response.StatusCode);
+    });
+
+
 
 app.MapStaticAssets();
 app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 app.MapRazorPages();
+
 
 app.MapGet("/ticket", async context =>
 {
@@ -87,5 +93,23 @@ app.MapGet("/ticket", async context =>
         await context.Response.WriteAsync($"{key}: {value}\r\n");
     }
 });
+
+app.MapGet("/list-routes", (IEnumerable<EndpointDataSource> endpointSources, EndpointDataSource etc) =>
+{
+    var sb = new StringBuilder();
+    foreach (var source in endpointSources)
+    {
+        foreach (var endpoint in source.Endpoints)
+        {
+            sb.AppendLine($"Type: {endpoint.ToString()} Label: { endpoint.DisplayName}");
+            foreach(var metadata in endpoint.Metadata)
+            {
+                sb.AppendLine($"       Metadata: {metadata}");
+            }
+        }
+    }
+
+    return sb.ToString();
+}).RequireAuthorization("admin");
 
 app.Run();
