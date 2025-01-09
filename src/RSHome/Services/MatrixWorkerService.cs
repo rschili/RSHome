@@ -42,7 +42,7 @@ public class MatrixWorkerService : BackgroundService
     private async Task MessageReceivedAsync(ReceivedTextMessage message)
     {
         var age = DateTimeOffset.Now - message.Timestamp; // filter the message spam we receive from the server at start
-        if(age.TotalSeconds < 10)
+        if(age.TotalSeconds > 10)
             return;
 
         Logger.LogInformation("Received message from {Sender}: {Body}", message.Sender.GetDisplayName(), message.Body);

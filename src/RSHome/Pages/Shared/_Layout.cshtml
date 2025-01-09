@@ -24,7 +24,7 @@
 
             @if (User.IsInRole("admin"))
             {
-                <li><a asp-page="/Services">Status</a></li>
+                <li><a asp-page="/Status">Status</a></li>
                 <li><text>@Context.User.Identity?.Name</text></li>
             }
             else
@@ -46,7 +46,7 @@
     <footer class="container">
         <hr />
         <p></p>
-    &copy; 2024 Robert Schili.
+    &copy; 2025 Robert Schili.
     </footer>
 </body>
 

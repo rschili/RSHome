@@ -25,8 +25,16 @@ builder.Logging
 builder.Services
     .AddSingleton(config)
     .AddHttpClient()
-    .AddHostedService<DiscordWorkerService>()
-    .AddRazorPages().WithRazorPagesRoot("/Pages");
+    .AddSingleton<DiscordWorkerService>()
+    .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())
+    .AddSingleton<MatrixWorkerService>()
+    .AddHostedService(p => p.GetRequiredService<MatrixWorkerService>())
+    .AddRazorPages(options => {
+        options.RootDirectory = "/Pages";
+        options.Conventions.AuthorizeFolder("/", "admin");
+        options.Conventions.AllowAnonymousToPage("/Index");
+        options.Conventions.AllowAnonymousToPage("/Login");
+    });
 builder.Services
     .AddAntiforgery()
     //.AddHealthChecks();
