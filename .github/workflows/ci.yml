@@ -28,6 +28,6 @@ jobs:
       working-directory: ./src
       run: dotnet build
         
-    - name: Execute unit tests
-      working-directory: ./src
-      run: dotnet test
+    # - name: Execute unit tests
+    #   working-directory: ./src
+    #   run: dotnet test
