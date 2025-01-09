@@ -19,9 +19,9 @@ builder.Logging
         options.TimestampFormat = "hh:mm:ss ";
         options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Enabled;
     })
-    .SetMinimumLevel(LogLevel.Warning)
-    .AddSeq(config.SeqUrl, config.SeqApiKey)
-    .AddFilter("RSHome.Services.DiscordWorkerService",LogLevel.Debug);
+    .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
+    .SetMinimumLevel(LogLevel.Information)
+    .AddSeq(config.SeqUrl, config.SeqApiKey);
 builder.Services
     .AddSingleton(config)
     .AddHttpClient()
@@ -43,6 +43,8 @@ builder.Services
     .AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(config.WebKeyStore))
     .SetApplicationName("RSHome");
+
+builder.Services.AddHttpClient(); // for matrix
 
 builder.Services.AddAuthorizationBuilder().AddPolicy("admin", policy => policy.RequireRole("admin"));
 
