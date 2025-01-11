@@ -94,6 +94,38 @@ public class SqliteService : IDisposable
         var results = await Connection.QueryAsync<MatrixMessage>("SELECT * FROM (SELECT * FROM MatrixMessages WHERE Room = @Room ORDER BY Id DESC LIMIT @Count) ORDER BY Id ASC", new { Room = room, Count = count });
         return results.ToList();
     }
+
+    public Task SetSettingAsync(string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required", nameof(key));
+        if (value == null) throw new ArgumentNullException(nameof(value));
+
+        var sql = "INSERT OR REPLACE INTO Settings(Key, Value) VALUES(@Key, @Value)";
+        var parameters = new { Key = key, Value = value };
+
+        return Connection.ExecuteAsync(sql, parameters);
+    }
+
+    public async Task<string?> GetSettingOrDefaultAsync(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required", nameof(key));
+
+        var sql = "SELECT Value FROM Settings WHERE Key = @Key";
+        var parameters = new { Key = key };
+
+        var result = await Connection.QuerySingleOrDefaultAsync<string?>(sql, parameters);
+        return result;
+    }
+
+    public Task RemoveSettingAsync(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required", nameof(key));
+
+        var sql = "DELETE FROM Settings WHERE Key = @Key";
+        var parameters = new { Key = key };
+
+        return Connection.ExecuteAsync(sql, parameters);
+    }
 }
 
 public class DiscordMessage
