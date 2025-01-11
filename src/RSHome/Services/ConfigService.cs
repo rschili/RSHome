@@ -21,7 +21,7 @@ public enum EnvVar
     PFX_PASSWORD,
 }
 
-public class Config
+public class ConfigService
 {
     private readonly Dictionary<EnvVar, string> _variables;
 
@@ -38,12 +38,12 @@ public class Config
     public string CertificatePath => _variables[EnvVar.CERTIFICATE_PATH];
     public string PfxPassword => _variables[EnvVar.PFX_PASSWORD];
 
-    private Config(Dictionary<EnvVar, string> variables)
+    private ConfigService(Dictionary<EnvVar, string> variables)
     {
         _variables = variables;
     }
 
-    public static Config LoadFromEnvFile()
+    public static ConfigService LoadFromEnvFile()
     {
         DotNetEnv.Env.TraversePath().Load();
 
@@ -55,6 +55,6 @@ public class Config
                 return str;
             });
 
-        return new Config(requiredVariables);
+        return new ConfigService(requiredVariables);
     }
 }

@@ -21,7 +21,7 @@ public class LoginModel : PageModel
     public bool AcceptTerms { get; set; } = true;
 
     [FromServices]
-    public Config Config { get; set; } = null!;
+    public ConfigService Config { get; set; } = null!;
 
     public async Task<IActionResult> OnPostAsync()
     {

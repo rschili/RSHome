@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using System.Text;
 
 Console.WriteLine("Loading variables...");
-var config = Config.LoadFromEnvFile();
+var config = ConfigService.LoadFromEnvFile();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging

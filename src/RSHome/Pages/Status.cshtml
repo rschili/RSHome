@@ -1,4 +1,37 @@
 @page
 @model StatusModel
 
-<h4>Hey there!</h4>
+<h4>Hey there here's the status from @DateTime.Now.ToString("f")!</h4>
+
+<table>
+    <tr>
+        <th>Service</th>
+        <th>Status</th>
+    </tr>
+    <tr>
+        <td>Matrix</td>
+        <td>
+            @if (Model.MatrixRunning)
+            {
+                <span>Running</span>
+            }
+            else
+            {
+                <span>Not Running</span>
+            }
+        </td>
+    </tr>
+    <tr>
+        <td>Discord</td>
+        <td>
+            @if (Model.DiscordRunning)
+            {
+                <span>Running</span>
+            }
+            else
+            {
+                <span>Not Running</span>
+            }
+        </td>
+    </tr>
+</table>
