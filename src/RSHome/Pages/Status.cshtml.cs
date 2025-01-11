@@ -3,7 +3,7 @@ using RSHome.Services;
 
 public class StatusModel : PageModel
 {
-    public ConfigService Config { get; init; }
+    public IConfigService Config { get; init; }
     public DiscordWorkerService DiscordWorkerService { get; init; }
     public MatrixWorkerService MatrixWorkerService { get; init; }
 
@@ -11,7 +11,7 @@ public class StatusModel : PageModel
 
     public bool DiscordRunning => DiscordWorkerService.IsRunning;
 
-    public StatusModel(ConfigService config, DiscordWorkerService discordWorkerService, MatrixWorkerService matrixWorkerService)
+    public StatusModel(IConfigService config, DiscordWorkerService discordWorkerService, MatrixWorkerService matrixWorkerService)
     {
         Config = config;
         DiscordWorkerService = discordWorkerService;

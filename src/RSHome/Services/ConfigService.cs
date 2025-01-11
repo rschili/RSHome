@@ -5,6 +5,24 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace RSHome.Services;
+
+public interface IConfigService
+{
+    string DiscordToken { get; }
+    ulong DiscordAdminId { get; }
+    string OpenAiApiKey { get; }
+    string MatrixUserId { get; }
+    string MatrixPassword { get; }
+    string SeqApiKey { get; }
+    string SeqUrl { get; }
+    string WebLoginHash { get; }
+    string WebKeyStore { get; }
+    string SqliteDbPath { get; }
+    string CertificatePath { get; }
+    string PfxPassword { get; }
+}
+
+
 public enum EnvVar
 {
     DISCORD_TOKEN,
@@ -21,7 +39,7 @@ public enum EnvVar
     PFX_PASSWORD,
 }
 
-public class ConfigService
+public class ConfigService : IConfigService
 {
     private readonly Dictionary<EnvVar, string> _variables;
 
@@ -48,9 +66,10 @@ public class ConfigService
         DotNetEnv.Env.TraversePath().Load();
 
         var requiredVariables = Enum.GetValues<EnvVar>()
-            .ToDictionary(e => e, e => {
+            .ToDictionary(e => e, e =>
+            {
                 var str = Environment.GetEnvironmentVariable(e.ToString());
-                if(string.IsNullOrWhiteSpace(str))
+                if (string.IsNullOrWhiteSpace(str))
                     throw new KeyNotFoundException($"Environment variable {e} is not set");
                 return str;
             });

@@ -2,10 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C#: RSHome [Default Configuration]",
+            "name": "Start App",
             "type": "dotnet",
             "request": "launch",
-            "projectPath": "${workspaceFolder}\\src\\RSHome\\RSHome.csproj"
+            "projectPath": "${workspaceFolder}/src/RSHome/RSHome.csproj"
+        },
+        {
+            "name": "Tests Debug",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/RSMatrix.Tests/RSMatrix.Tests.csproj"
         }
     ]
 }

@@ -7,14 +7,14 @@ namespace RSHome.Services;
 public class MatrixWorkerService : BackgroundService
 {
     private ILogger Logger { get; init; }
-    private ConfigService Config { get; init; }
+    private IConfigService Config { get; init; }
     private IHttpClientFactory HttpClientFactory { get; init; }
 
     public bool IsRunning => _client != null;
 
     private MatrixTextClient? _client;
 
-    public MatrixWorkerService(ILogger<DiscordWorkerService> logger, ConfigService config, IHttpClientFactory httpClientFactory)
+    public MatrixWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));

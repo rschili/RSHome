@@ -1,17 +1,18 @@
+using System.Data;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
 namespace RSHome.Services;
 
-public class ArchiveService : IDisposable
+public class SqliteService : IDisposable
 {
     public SqliteConnection Connection { get; private init; }
-    private ArchiveService(SqliteConnection connection)
+    private SqliteService(SqliteConnection connection)
     {
         Connection = connection ?? throw new ArgumentNullException(nameof(connection));
     }
 
-    public static async Task<ArchiveService> CreateAsync(ConfigService configService)
+    public static async Task<SqliteService> CreateAsync(IConfigService configService)
     {
         SqliteConnectionStringBuilder conStringBuilder = new();
         conStringBuilder.DataSource = configService.SqliteDbPath; // ":memory:" for in-memory database
@@ -33,7 +34,11 @@ public class ArchiveService : IDisposable
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
-        return new ArchiveService(connection);
+        // Dapper does not correctly handle DateTimeOffset, so we need to add a custom type handler
+        SqlMapper.RemoveTypeMap(typeof(DateTimeOffset));
+        SqlMapper.AddTypeHandler(DateTimeHandler.Default);
+
+        return new SqliteService(connection);
     }
 
     public void Dispose()
@@ -49,7 +54,7 @@ public class ArchiveService : IDisposable
         using var command = Connection.CreateCommand();
         command.CommandText = "INSERT OR IGNORE INTO DiscordMessages(Id, Timestamp, UserId, UserLabel, Body, IsFromSelf, ChannelId) VALUES(@Id, @Timestamp, @UserId, @UserLabel, @Body, @IsFromSelf, @ChannelId)";
         command.Parameters.AddWithValue("@Id", id);
-        command.Parameters.AddWithValue("@Timestamp", timestamp);
+        command.Parameters.AddWithValue("@Timestamp", timestamp.UtcTicks);
         command.Parameters.AddWithValue("@UserId", userId);
         command.Parameters.AddWithValue("@UserLabel", userLabel);
         command.Parameters.AddWithValue("@Body", body);
@@ -69,7 +74,7 @@ public class ArchiveService : IDisposable
         using var command = Connection.CreateCommand();
         command.CommandText = "INSERT OR IGNORE INTO MatrixMessages(Id, Timestamp, UserId, UserLabel, Body, IsFromSelf, Room) VALUES(@Id, @Timestamp, @UserId, @UserLabel, @Body, @IsFromSelf, @Room)";
         command.Parameters.AddWithValue("@Id", id);
-        command.Parameters.AddWithValue("@Timestamp", timestamp);
+        command.Parameters.AddWithValue("@Timestamp", timestamp.UtcTicks);
         command.Parameters.AddWithValue("@UserId", userId);
         command.Parameters.AddWithValue("@UserLabel", userLabel);
         command.Parameters.AddWithValue("@Body", body);
@@ -111,4 +116,33 @@ public class MatrixMessage
     public required string Body { get; set; }
     public bool IsFromSelf { get; set; }
     public required string Room { get; set; }
+}
+
+public class DateTimeHandler : SqlMapper.TypeHandler<DateTimeOffset>
+{
+    private readonly TimeZoneInfo databaseTimeZone = TimeZoneInfo.Local;
+    public static readonly DateTimeHandler Default = new DateTimeHandler();
+
+    public DateTimeHandler()
+    {
+
+    }
+
+    public override DateTimeOffset Parse(object value)
+    {
+        if (value == null || value == DBNull.Value)
+            return DateTimeOffset.MinValue;
+
+        if(value is long l)
+        {
+            return new DateTimeOffset(l, TimeSpan.Zero);
+        }
+
+        throw new ArgumentException("Invalid DateTimeOffset value");
+    }
+
+    public override void SetValue(IDbDataParameter parameter, DateTimeOffset value)
+    {
+        parameter.Value = value.UtcTicks;
+    }
 }

@@ -23,7 +23,7 @@ builder.Logging
     .SetMinimumLevel(LogLevel.Information)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 builder.Services
-    .AddSingleton(config)
+    .AddSingleton<IConfigService>(config)
     .AddHttpClient()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())

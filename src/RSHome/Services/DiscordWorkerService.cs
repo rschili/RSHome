@@ -7,13 +7,13 @@ namespace RSHome.Services;
 public class DiscordWorkerService : BackgroundService
 {
     private ILogger Logger { get; init; }
-    private ConfigService Config { get; init; }
+    private IConfigService Config { get; init; }
 
     public bool IsRunning { get; private set; }
 
     private DiscordSocketClient? _client;
 
-    public DiscordWorkerService(ILogger<DiscordWorkerService> logger, ConfigService config)
+    public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));
