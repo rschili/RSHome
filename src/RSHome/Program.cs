@@ -25,6 +25,8 @@ builder.Logging
 builder.Services
     .AddSingleton<IConfigService>(config)
     .AddHttpClient()
+    .AddSingleton<SqliteService>()
+    .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())
     .AddSingleton<MatrixWorkerService>()
