@@ -18,19 +18,20 @@ public class SqliteService : IDisposable
         conStringBuilder.DataSource = configService.SqliteDbPath; // ":memory:" for in-memory database
         SqliteConnection connection = new(conStringBuilder.ConnectionString);
         await connection.OpenAsync();
+        //TODO: add a revision number to the database schema to allow for future migrations
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "CREATE TABLE DiscordMessages (Id INTEGER PRIMARY KEY, Timestamp DATETIME NOT NULL, UserId INTEGER NOT NULL, UserLabel TEXT NOT NULL, Body TEXT NOT NULL, IsFromSelf BOOLEAN NOT NULL, ChannelId INTEGER NOT NULL)";
+            command.CommandText = "CREATE TABLE IF NOT EXISTS DiscordMessages (Id INTEGER PRIMARY KEY, Timestamp DATETIME NOT NULL, UserId INTEGER NOT NULL, UserLabel TEXT NOT NULL, Body TEXT NOT NULL, IsFromSelf BOOLEAN NOT NULL, ChannelId INTEGER NOT NULL)";
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "CREATE TABLE MatrixMessages (Id TEXT PRIMARY KEY, Timestamp DATETIME NOT NULL, UserId TEXT NOT NULL, UserLabel TEXT NOT NULL, Body TEXT NOT NULL, IsFromSelf BOOLEAN NOT NULL, Room TEXT NOT NULL)";
+            command.CommandText = "CREATE TABLE IF NOT EXISTS MatrixMessages (Id TEXT PRIMARY KEY, Timestamp DATETIME NOT NULL, UserId TEXT NOT NULL, UserLabel TEXT NOT NULL, Body TEXT NOT NULL, IsFromSelf BOOLEAN NOT NULL, Room TEXT NOT NULL)";
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "CREATE TABLE Settings (Key TEXT PRIMARY KEY, Value TEXT)";
+            command.CommandText = "CREATE TABLE IF NOT EXISTS Settings (Key TEXT PRIMARY KEY, Value TEXT)";
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 

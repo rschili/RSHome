@@ -110,7 +110,7 @@ public class DiscordWorkerService : BackgroundService
         if (arg.Author.Id == Client.CurrentUser.Id)
         {
             await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, GetDisplayName(arg.Author), arg.Content,
-            true, arg.Channel.Id);
+            true, arg.Channel.Id).ConfigureAwait(false);
             return;
         }
 
@@ -136,7 +136,7 @@ public class DiscordWorkerService : BackgroundService
         if (sanitizedMessage.Length > 300)
             sanitizedMessage = sanitizedMessage.Substring(0, 300);
 
-        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, userName, sanitizedMessage, false, arg.Channel.Id);
+        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, userName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
 
         if (!mentioned && !referenced)
             return;
@@ -144,8 +144,8 @@ public class DiscordWorkerService : BackgroundService
         if (arg.Author.IsBot)
             return;
 
-        await arg.Channel.TriggerTypingAsync();
-        var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 10);
+        await arg.Channel.TriggerTypingAsync().ConfigureAwait(false);
+        var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 10).ConfigureAwait(false);
         string systemInstruction = $"""
             Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger und arroganter Wissenschaftler aus Futurama.
             Als ehemaliger Student und erbitterter Rivale von Professor Farnsworth bist du stolz, eigenwillig und rachsüchtig.
@@ -166,8 +166,8 @@ public class DiscordWorkerService : BackgroundService
                 return; // may be rate limited 
             }
             
-            ReplaceNicknamesWithUserTags(response, history);
-            await arg.Channel.SendMessageAsync(response, messageReference: new MessageReference(arg.Id));
+            response = ReplaceNicknamesWithUserTags(response, history);
+            await arg.Channel.SendMessageAsync(response, messageReference: new MessageReference(arg.Id)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -200,7 +200,7 @@ public class DiscordWorkerService : BackgroundService
 
     private static string ReplaceNicknamesWithUserTags(string message, List<DiscordMessage> history)
     {
-        var regex = new Regex(@"(?:`)\[\[(?<name>[^\]]+)\]\](?:`)");
+        var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
         var matches = regex.Matches(message);
         foreach (Match match in matches)
         {

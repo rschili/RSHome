@@ -23,10 +23,11 @@ builder.Logging
     .SetMinimumLevel(LogLevel.Information)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 
+var sqliteService = await SqliteService.CreateAsync(config).ConfigureAwait(false);
 builder.Services
     .AddSingleton<IConfigService>(config)
     .AddHttpClient()
-    .AddSingleton<SqliteService>()
+    .AddSingleton(sqliteService)
     .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())

@@ -5,13 +5,13 @@ namespace RSHome.Services;
 
 public class OpenAIService
 {
-    public ConfigService Config { get; private init; }
+    public IConfigService Config { get; private init; }
     public ChatClient Client { get; private init; }
     public ILogger Logger { get; private init; }
 
     public LeakyBucketRateLimiter RateLimiter { get; private init; } = new(10, 60);
 
-    public OpenAIService(ConfigService config, ILogger logger)
+    public OpenAIService(IConfigService config, ILogger<OpenAIService> logger)
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
