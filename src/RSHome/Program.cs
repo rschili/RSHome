@@ -22,6 +22,7 @@ builder.Logging
     .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
     .SetMinimumLevel(LogLevel.Information)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
+
 builder.Services
     .AddSingleton<IConfigService>(config)
     .AddHttpClient()

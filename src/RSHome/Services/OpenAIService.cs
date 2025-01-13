@@ -18,7 +18,7 @@ public class OpenAIService
         Client = new ChatClient(model: "gpt-4o", apiKey: config.OpenAiApiKey);
     }
 
-    public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<(bool isSelf, string message, string participantName)> inputs)
+    public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
     {
         if (!RateLimiter.Leak())
             return null;
@@ -73,3 +73,5 @@ public class OpenAIService
         }
     }
 }
+
+public record AIMessage(bool isSelf, string message, string participantName);
