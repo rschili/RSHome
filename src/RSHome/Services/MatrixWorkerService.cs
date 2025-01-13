@@ -41,6 +41,8 @@ public class MatrixWorkerService : BackgroundService
 
     private async Task MessageReceivedAsync(ReceivedTextMessage message)
     {
+        try
+        {
         var age = DateTimeOffset.Now - message.Timestamp; // filter the message spam we receive from the server at start
         if(age.TotalSeconds > 10)
             return;
@@ -49,9 +51,14 @@ public class MatrixWorkerService : BackgroundService
 
         if(message.Body?.Contains("ping") == true && age.TotalSeconds < 10)
         {
-            await message.Room.SendTypingNotificationAsync();
-            await Task.Delay(2000);
-            await message.SendResponseAsync("pong!");
+            await message.Room.SendTypingNotificationAsync().ConfigureAwait(false);
+            await Task.Delay(2000).ConfigureAwait(false);
+            await message.SendResponseAsync("pong!").ConfigureAwait(false);
+        }
+        }
+        catch (Exception ex)
+        {
+        Logger.LogError(ex, "An error occurred while processing a message.");
         }
     }
 }
