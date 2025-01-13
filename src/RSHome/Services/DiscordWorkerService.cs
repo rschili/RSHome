@@ -74,17 +74,23 @@ public class DiscordWorkerService : BackgroundService
         if (_client == null)
             return Task.CompletedTask;
 
+        _client.MessageReceived += MessageReceived; 
+
+        Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
+        IsRunning = true;
+        return Task.CompletedTask;
+    }
+
+    private Task MessageReceived(SocketMessage arg)
+    {
         // There is a timeout on the MessageReceived event, so we need to use a Task.Run to avoid blocking the event loop
-        _client.MessageReceived += (arg) => Task.Run(() => MessageReceivedAsync(arg)).ContinueWith(task =>
+        _ = Task.Run(() => MessageReceivedAsync(arg)).ContinueWith(task =>
         {
             if (task.Exception != null)
             {
                 Logger.LogError(task.Exception, "An error occurred while processing a message.");
             }
         }, TaskContinuationOptions.OnlyOnFaulted);
-
-        Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
-        IsRunning = true;
         return Task.CompletedTask;
     }
 
@@ -100,7 +106,7 @@ public class DiscordWorkerService : BackgroundService
             LogSeverity.Debug => LogLevel.Debug,
             _ => LogLevel.None
         };
-        Logger.Log(logLevel, message.Message);
+        Logger.Log(logLevel, message.Exception, message.Message);
         return Task.CompletedTask;
     }
 
