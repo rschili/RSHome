@@ -3,12 +3,13 @@ using System.Text.RegularExpressions;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Primitives;
 
 namespace RSHome.Services;
 
 public class DiscordWorkerService : BackgroundService
 {
-    private ILogger Logger { get; init; }
+    public ILogger Logger { get; init; }
     private IConfigService Config { get; init; }
     private SqliteService SqliteService { get; init; }
 
@@ -19,6 +20,19 @@ public class DiscordWorkerService : BackgroundService
     private DiscordSocketClient? _client;
 
     public DiscordSocketClient Client => _client ?? throw new InvalidOperationException("Discord client is not initialized.");
+
+    private bool IsInDialogueMode => RemainingDialogueMessages > 0;
+
+    private int RemainingDialogueMessages = 0;
+
+    private const string DEFAULT_INSTRUCTION = $"""
+        Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger und arroganter Wissenschaftler aus Futurama.
+        Als ehemaliger Student und erbitterter Rivale von Professor Farnsworth bist du stolz, eigenwillig und rachsüchtig.
+        Nach deinem Tod im Alter von 130 Jahren wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit geschickt,
+        um den Pöbel in Chatrooms zu beraten - eine Aufgabe, die du nur widerwillig erfüllst. Du bist arrogant, kurz angebunden und bereit,
+        fragwürdige Experimente zu rechtfertigen, um deinen Intellekt zu beweisen. Antworte so kurz wie möglich, um deine Abneigung auszudrücken.
+        Verwende die Syntax `[[Vollständiger Name]]`, um einen Nutzer zu erwähnen.
+        """;
 
     public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, SqliteService sqliteService, OpenAIService openAIService)
     {
@@ -123,20 +137,6 @@ public class DiscordWorkerService : BackgroundService
         if (arg.Type != MessageType.Default && arg.Type != MessageType.Reply)
             return;
 
-        bool mentioned = arg.Tags.Any((tag) =>
-        {
-            if (tag.Type == TagType.UserMention)
-                return (tag.Value as IUser)?.Id == Client.CurrentUser.Id;
-
-            return false;
-        });
-
-        bool referenced = false;
-        if (arg.Reference != null && arg is SocketUserMessage userMessage)
-        {
-            referenced = userMessage.ReferencedMessage.Author.Id == Client.CurrentUser.Id;
-        }
-
         string userName = GetDisplayName(arg.Author);
         string sanitizedMessage = ReplaceUserTagsWithNicknames(arg);
         if (sanitizedMessage.Length > 300)
@@ -144,41 +144,48 @@ public class DiscordWorkerService : BackgroundService
 
         await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, userName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
 
-        if (!mentioned && !referenced)
-            return;
-
-        if (arg.Author.IsBot)
+        if (IsInDialogueMode)
+            Interlocked.Decrement(ref RemainingDialogueMessages);
+        else if(!ShouldRespond(arg))
             return;
 
         await arg.Channel.TriggerTypingAsync().ConfigureAwait(false);
         var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 10).ConfigureAwait(false);
-        string systemInstruction = $"""
-            Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger und arroganter Wissenschaftler aus Futurama.
-            Als ehemaliger Student und erbitterter Rivale von Professor Farnsworth bist du stolz, eigenwillig und rachsüchtig.
-            Nach deinem Tod im Alter von 130 Jahren wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit geschickt,
-            um den Pöbel in Chatrooms zu beraten – eine Aufgabe, die du nur widerwillig erfüllst. Du bist arrogant, kurz angebunden und bereit,
-            fragwürdige Experimente zu rechtfertigen, um deinen Intellekt zu beweisen. Antworte so kurz wie möglich, um deine Abneigung auszudrücken.
-            Verwende die Syntax `[[Vollständiger Name]]`, um einen Nutzer zu erwähnen.
-            """;
-
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
 
         try
         {
-            var response = await OpenAIService.GenerateResponseAsync(systemInstruction, messages).ConfigureAwait(false);
+            var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
             if(string.IsNullOrEmpty(response))
             {
                 Logger.LogWarning($"OpenAI did not return a response to: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}");
                 return; // may be rate limited 
             }
             
-            response = ReplaceNicknamesWithUserTags(response, history);
+            var userNameUserIdMap = GenerateUserNameUserIdMap(history);
+            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap);
             await arg.Channel.SendMessageAsync(response, messageReference: new MessageReference(arg.Id)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "An error occurred during the OpenAI call. Message: {Message}", arg.Content.Substring(0, Math.Min(arg.Content.Length, 100)));
         }
+    }
+
+    private bool ShouldRespond(SocketMessage arg)
+    {
+        if (arg.Author.IsBot)
+            return false;
+
+        //mentions
+        if (arg.Tags.Any((tag) => tag.Type == TagType.UserMention && (tag.Value as IUser)?.Id == Client.CurrentUser.Id))
+            return true;
+
+        if (arg.Reference != null && arg is SocketUserMessage userMessage &&
+            userMessage.ReferencedMessage.Author.Id == Client.CurrentUser.Id)
+            return true;
+
+        return false;
     }
 
     private static string ReplaceUserTagsWithNicknames(IMessage msg)
@@ -204,23 +211,73 @@ public class DiscordWorkerService : BackgroundService
         return text.ToString();
     }
 
-    private static string ReplaceNicknamesWithUserTags(string message, List<DiscordMessage> history)
+private static string ReplaceNicknamesWithUserTags(string message, Dictionary<string, ulong> userNameUserIdMap)
+{
+    var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
+    var matches = regex.Matches(message);
+    foreach (Match match in matches)
     {
-        var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
-        var matches = regex.Matches(message);
-        foreach (Match match in matches)
+        var userName = match.Groups["name"].Value;
+        if (userNameUserIdMap.TryGetValue(userName, out var userId))
         {
-            var userName = match.Groups["name"].Value;
-            var userId = history.Where(h => string.Equals(h.UserLabel, userName, StringComparison.OrdinalIgnoreCase)).Select(h => h.UserId).FirstOrDefault(0ul);
-            if (userId != 0)
-            {
             var mention = MentionUtils.MentionUser(userId);
             message = message.Replace(match.Value, mention);
-            continue;
-            }
+        }
+        else
+        {
             message = message.Replace(match.Value, userName);
         }
-        return message;
+    }
+    return message;
+}
+
+private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordMessage> history)
+{
+    return history
+        .GroupBy(h => h.UserLabel, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.First().UserId, StringComparer.OrdinalIgnoreCase);
+}
+
+    internal async Task StartDialogueAsync(string name, ulong userId, ulong channelId, int messagesCount)
+    {
+        if(IsInDialogueMode)
+        {
+            throw new InvalidOperationException("Dialogue mode is already active.");
+        }
+        RemainingDialogueMessages = messagesCount - 1;
+        var channel = await Client.GetChannelAsync(channelId).ConfigureAwait(false);
+        if (channel == null)
+        {
+            throw new InvalidOperationException($"Channel not found: {channelId}");
+        }
+        if(channel.ChannelType != ChannelType.Text || !(channel is ITextChannel textChannel))
+        {
+            throw new InvalidOperationException($"Channel is not a text channel: {channelId}");
+        }
+
+        await textChannel.TriggerTypingAsync().ConfigureAwait(false);
+        var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(textChannel.Id, 10).ConfigureAwait(false);
+        var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
+        var extendedInstruction = $@"{DEFAULT_INSTRUCTION}{Environment.NewLine}Du wird nachfolgend einen Dialog mit {name} beginnen.";
+
+        try
+        {
+            var response = await OpenAIService.GenerateResponseAsync(extendedInstruction, messages).ConfigureAwait(false);
+            if(string.IsNullOrEmpty(response))
+            {
+                Logger.LogWarning("OpenAI did not return a response to starting dialogue.");
+                return; // may be rate limited 
+            }
+            
+            var userNameUserIdMap = GenerateUserNameUserIdMap(history);
+            userNameUserIdMap[name] = userId;
+            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap);
+            await textChannel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An error occurred during the OpenAI call to start a dialogue.");
+        }
     }
 
     private static string GetDisplayName(IUser? user)
@@ -235,4 +292,5 @@ public class DiscordWorkerService : BackgroundService
         _client = null;
         base.Dispose();
     }
+
 }
