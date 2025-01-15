@@ -12,6 +12,11 @@ public class StatusModel : PageModel
 
     public bool MessageIsError { get; set; } = false;
 
+    public List<JoinedTextChannel> TextChannels { get; set;} = new();
+
+    public List<ChannelUser>? SelectedChannelUsers { get; set; } = null;
+    public ulong? SelectedChannelId { get; set; } = null;
+
     //public bool MatrixRunning => MatrixWorkerService.IsRunning;
 
     public bool DiscordRunning => DiscordWorkerService.IsRunning;
@@ -21,24 +26,49 @@ public class StatusModel : PageModel
         Config = config;
         DiscordWorkerService = discordWorkerService;
         //MatrixWorkerService = matrixWorkerService;
+        TextChannels = DiscordWorkerService.TextChannels;
     }
 
+
     public void OnGet()
-        {
-        }
+    {
+    }
 
-        public Task<IActionResult> OnPostAsync()
-        {
-            if (bool.TryParse(Request.Form["startDialogue"], out bool startDialogueValue) && startDialogueValue)
-                return Task.FromResult(PostStartDialogue());
+    public Task<IActionResult> OnPostAsync()
+    {
+        if (bool.TryParse(Request.Form["startDialogue"], out bool startDialogueValue) && startDialogueValue)
+            return Task.FromResult(PostStartDialogue());
 
-            return Task.FromResult<IActionResult>(Page());
-        }
+        return Task.FromResult<IActionResult>(Page());
+    }
 
     private IActionResult PostStartDialogue()
     {
-        var name = Request.Form["name"];
-        var userId = Request.Form["userid"];
+        var channel = Request.Form["channel"];
+        if (string.IsNullOrWhiteSpace(channel) || !ulong.TryParse(channel, out var channelId))
+        {
+            Message = "Channel is required.";
+            MessageIsError = true;
+            return Page();
+        }
+
+        var validatedChannel = TextChannels.FirstOrDefault(c => c.Id == channelId);
+        if (validatedChannel == null)
+        {
+            Message = "Channel is invalid.";
+            MessageIsError = true;
+            return Page();
+        }
+
+        SelectedChannelUsers = validatedChannel.Users;
+        SelectedChannelId = validatedChannel.Id;
+
+        var selectedUser = Request.Form["userId"];
+        if (string.IsNullOrWhiteSpace(selectedUser) || !ulong.TryParse(selectedUser, out var userId))
+        {
+            return Page();
+        }
+/*        var userId = Request.Form["userid"];
         var messages = Request.Form["messages"];
         var channelId = Request.Form["channelid"];
 
@@ -60,12 +90,12 @@ public class StatusModel : PageModel
         _ = Task.Run(() => DiscordWorkerService.StartDialogueAsync(name!, userIdValue, channelIdValue, messagesCount).ConfigureAwait(false))
             .ContinueWith(task =>
             {
-            if (task.Exception != null)
-            {
-                // Log the exception (assuming you have a logger, replace 'Logger' with your actual logger instance)
-                DiscordWorkerService.Logger.LogError(task.Exception, "An error occurred while starting the dialogue.");
-            }
-            }, TaskContinuationOptions.OnlyOnFaulted);
+                if (task.Exception != null)
+                {
+                    // Log the exception (assuming you have a logger, replace 'Logger' with your actual logger instance)
+                    DiscordWorkerService.Logger.LogError(task.Exception, "An error occurred while starting the dialogue.");
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);*/
 
         return Page();
     }

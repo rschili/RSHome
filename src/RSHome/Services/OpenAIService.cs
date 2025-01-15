@@ -37,12 +37,10 @@ public class OpenAIService
         {
             var participantName = input.participantName;
             if(participantName == null || participantName.Length >= 100)
-                continue; // skip this message
+                throw new ArgumentException("Participant name is too long.", nameof(participantName));
 
             if (!IsValidName(participantName))
-            {
-                participantName = SanitizeName(participantName, replacedParticipantNames);
-            }
+                throw new ArgumentException("Participant name is invalid.", nameof(participantName));
 
             if (input.isSelf)
             {
@@ -72,7 +70,7 @@ public class OpenAIService
             foreach (var content in response.Value.Content)
             {
                 if (content.Kind != ChatMessageContentPartKind.Text || !string.IsNullOrEmpty(content.Text))
-                    return RestoreNames(content.Text, replacedParticipantNames);
+                    return content.Text;
             }
 
             Logger.LogWarning("OpenAI call did not return any text content.");
@@ -85,39 +83,21 @@ public class OpenAIService
         }
     }
 
-    internal static string SanitizeName(string participantName, Dictionary<string, string> replacedParticipantNames)
+    public static string SanitizeName(string participantName)
     {
         ArgumentNullException.ThrowIfNull(participantName, nameof(participantName));
-        ArgumentNullException.ThrowIfNull(replacedParticipantNames, nameof(replacedParticipantNames));
 
-        if (replacedParticipantNames.TryGetValue(participantName, out var sanitizedName))
-            return sanitizedName;
-
-        string normalized = participantName.Normalize(NormalizationForm.FormD);
+        string withoutSpaces = participantName.Replace(" ", "_");
+        string normalized = withoutSpaces.Normalize(NormalizationForm.FormD);
         string safeName = Regex.Replace(normalized, @"[^a-zA-Z0-9_-]+", "");
+        if(safeName.Length > 100)
+            safeName = safeName.Substring(0, 100);
 
-        replacedParticipantNames[participantName] = safeName;
+        safeName = safeName.Trim('_');
         return safeName;
     }
 
-    internal static string RestoreNames(string response, Dictionary<string, string> replacedParticipantNames)
-    {
-        ArgumentNullException.ThrowIfNull(response, nameof(response));
-        ArgumentNullException.ThrowIfNull(replacedParticipantNames, nameof(replacedParticipantNames));
-
-        if (replacedParticipantNames.Count == 0)
-            return response;
-
-        StringBuilder sb = new(response);
-        foreach (var (originalName, sanitizedName) in replacedParticipantNames)
-        {
-            sb.Replace(sanitizedName, originalName);
-        }
-
-        return sb.ToString();
-    }
-
-    private bool IsValidName(string name)
+    public static bool IsValidName(string name)
     {
         return !string.IsNullOrEmpty(name) && Regex.IsMatch(name, "^[a-zA-Z0-9_-]+$");
     }

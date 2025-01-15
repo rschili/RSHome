@@ -1,7 +1,8 @@
 @page
 @model StatusModel
 
-<h4>Hey there here's the status from @DateTime.Now.ToString("f")!</h4>
+<h1>Status</h1>
+<p>@DateTime.Now.ToString("f")!</p>
 
 <table>
     <tr>
@@ -26,15 +27,17 @@
         <td>
             @if (Model.DiscordRunning)
             {
-                <span>Running</span>
+                <span>Läuft</span>
             }
             else
             {
-                <span>Not Running</span>
+                <span>Läuft nicht!</span>
             }
         </td>
     </tr>
 </table>
+
+<h1>Discord Dialog</h1>
 
 @if (!ModelState.IsValid)
 {
@@ -51,22 +54,39 @@ else if (!string.IsNullOrEmpty(Model.Message))
 }
 
 <form method="post">
-    <div>
-        <label for="name">Name:</label>
-        <input type="text" id="name" name="name" />
-    </div>
-    <div>
-        <label for="userid">User ID:</label>
-        <input type="text" id="userid" name="userid" />
-    </div>
-    <div>
-        <label for="channelid">Channel ID:</label>
-        <input type="text" id="channelid" name="channelid" />
-    </div>
-    <div>
-        <label for="messages">Number of Messages:</label>
+    @if (Model.SelectedChannelUsers == null || Model.SelectedChannelId == null)
+    {
+    <fieldset>
+        <label for="channel">Kanal:</label>
+        <select id="channel" name="channel" required>
+            @foreach (var channel in Model.TextChannels)
+            {
+                <option value="@channel.Id">@channel.Name</option>
+            }
+        </select>
+    </fieldset>
+    } else 
+    {
+    <fieldset>
+        <label for="channel">Kanal:</label>
+        <select id="channel" name="channel" required readonly>
+            <option value="@Model.SelectedChannelId" selected>@Model.TextChannels.Where(c => c.Id == Model.SelectedChannelId).First().Name</option>
+        </select>
+    </fieldset>
+    <fieldset>
+        <label for="channel">Zielobjekt:</label>
+        <select id="userId" name="userId" required>
+            @foreach (var user in Model.SelectedChannelUsers)
+            {
+                <option value="@user.Id">@user.Name - (@user.OpenAIName)</option>
+            }
+        </select>
+    </fieldset>
+    <fieldset>
+        <label for="messages">Anzahl an Nachrichten:</label>
         <input type="number" id="messages" name="messages" />
-    </div>
+    </fieldset>
+    }
     <input type="hidden" id="startDialogue" name="startDialogue" value="true" />
     <button type="submit">Submit</button>
 </form>

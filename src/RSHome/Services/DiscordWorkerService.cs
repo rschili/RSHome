@@ -25,6 +25,8 @@ public class DiscordWorkerService : BackgroundService
 
     private int RemainingDialogueMessages = 0;
 
+    public List<JoinedTextChannel> TextChannels { get; private set; } = new();
+
     private const string DEFAULT_INSTRUCTION = $"""
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger und arroganter Wissenschaftler aus Futurama.
         Als ehemaliger Student und erbitterter Rivale von Professor Farnsworth bist du stolz, eigenwillig und rachsüchtig.
@@ -44,7 +46,7 @@ public class DiscordWorkerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var intents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent;
+        var intents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent | GatewayIntents.GuildMembers;
         intents &= ~GatewayIntents.GuildInvites;
         intents &= ~GatewayIntents.GuildScheduledEvents;
 
@@ -83,16 +85,16 @@ public class DiscordWorkerService : BackgroundService
         _client = null;
     }
 
-    private Task ReadyAsync()
+    private async Task ReadyAsync()
     {
         if (_client == null)
-            return Task.CompletedTask;
+            return;
 
-        _client.MessageReceived += MessageReceived; 
+        _client.MessageReceived += MessageReceived;
 
         Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
+        TextChannels = await GetTextChannels();
         IsRunning = true;
-        return Task.CompletedTask;
     }
 
     private Task MessageReceived(SocketMessage arg)
@@ -126,14 +128,6 @@ public class DiscordWorkerService : BackgroundService
 
     private async Task MessageReceivedAsync(SocketMessage arg)
     {
-        // The bot should never respond to itself.
-        if (arg.Author.Id == Client.CurrentUser.Id)
-        {
-            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, GetDisplayName(arg.Author), arg.Content,
-            true, arg.Channel.Id).ConfigureAwait(false);
-            return;
-        }
-
         if (arg.Type != MessageType.Default && arg.Type != MessageType.Reply)
             return;
 
@@ -142,11 +136,18 @@ public class DiscordWorkerService : BackgroundService
         if (sanitizedMessage.Length > 300)
             sanitizedMessage = sanitizedMessage.Substring(0, 300);
 
+        // The bot should never respond to itself.
+        if (arg.Author.Id == Client.CurrentUser.Id)
+        {
+            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, GetDisplayName(arg.Author), sanitizedMessage, true, arg.Channel.Id).ConfigureAwait(false);
+            return;
+        }
+
         await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, userName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
 
         if (IsInDialogueMode)
             Interlocked.Decrement(ref RemainingDialogueMessages);
-        else if(!ShouldRespond(arg))
+        else if (!ShouldRespond(arg))
             return;
 
         await arg.Channel.TriggerTypingAsync().ConfigureAwait(false);
@@ -156,15 +157,15 @@ public class DiscordWorkerService : BackgroundService
         try
         {
             var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
-            if(string.IsNullOrEmpty(response))
+            if (string.IsNullOrEmpty(response))
             {
                 Logger.LogWarning($"OpenAI did not return a response to: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}");
                 return; // may be rate limited 
             }
-            
+
             var userNameUserIdMap = GenerateUserNameUserIdMap(history);
-            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap);
-            await arg.Channel.SendMessageAsync(response, messageReference: new MessageReference(arg.Id)).ConfigureAwait(false);
+            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap, out var hasMentions);
+            await arg.Channel.SendMessageAsync(response, messageReference: hasMentions ? null : new MessageReference(arg.Id)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -211,36 +212,38 @@ public class DiscordWorkerService : BackgroundService
         return text.ToString();
     }
 
-private static string ReplaceNicknamesWithUserTags(string message, Dictionary<string, ulong> userNameUserIdMap)
-{
-    var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
-    var matches = regex.Matches(message);
-    foreach (Match match in matches)
+    private static string ReplaceNicknamesWithUserTags(string message, Dictionary<string, ulong> userNameUserIdMap, out bool hasMentions)
     {
-        var userName = match.Groups["name"].Value;
-        if (userNameUserIdMap.TryGetValue(userName, out var userId))
+        hasMentions = false;
+        var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
+        var matches = regex.Matches(message);
+        foreach (Match match in matches)
         {
-            var mention = MentionUtils.MentionUser(userId);
-            message = message.Replace(match.Value, mention);
+            var userName = match.Groups["name"].Value;
+            if (userNameUserIdMap.TryGetValue(userName, out var userId))
+            {
+                var mention = MentionUtils.MentionUser(userId);
+                message = message.Replace(match.Value, mention);
+            }
+            else
+            {
+                message = message.Replace(match.Value, userName);
+            }
+            hasMentions = true;
         }
-        else
-        {
-            message = message.Replace(match.Value, userName);
-        }
+        return message;
     }
-    return message;
-}
 
-private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordMessage> history)
-{
-    return history
-        .GroupBy(h => h.UserLabel, StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(g => g.Key, g => g.First().UserId, StringComparer.OrdinalIgnoreCase);
-}
+    private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordMessage> history)
+    {
+        return history
+            .GroupBy(h => h.UserLabel, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().UserId, StringComparer.OrdinalIgnoreCase);
+    }
 
     internal async Task StartDialogueAsync(string name, ulong userId, ulong channelId, int messagesCount)
     {
-        if(IsInDialogueMode)
+        if (IsInDialogueMode)
         {
             throw new InvalidOperationException("Dialogue mode is already active.");
         }
@@ -250,7 +253,7 @@ private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordM
         {
             throw new InvalidOperationException($"Channel not found: {channelId}");
         }
-        if(channel.ChannelType != ChannelType.Text || !(channel is ITextChannel textChannel))
+        if (channel.ChannelType != ChannelType.Text || !(channel is ITextChannel textChannel))
         {
             throw new InvalidOperationException($"Channel is not a text channel: {channelId}");
         }
@@ -258,20 +261,20 @@ private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordM
         await textChannel.TriggerTypingAsync().ConfigureAwait(false);
         var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(textChannel.Id, 10).ConfigureAwait(false);
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
-        var extendedInstruction = $@"{DEFAULT_INSTRUCTION}{Environment.NewLine}Du wird nachfolgend einen Dialog mit {name} beginnen.";
+        var extendedInstruction = $@"{DEFAULT_INSTRUCTION}{Environment.NewLine}Denk dir ein Thema aus und beginne ein Gespräch mit [[{name}]].";
 
         try
         {
             var response = await OpenAIService.GenerateResponseAsync(extendedInstruction, messages).ConfigureAwait(false);
-            if(string.IsNullOrEmpty(response))
+            if (string.IsNullOrEmpty(response))
             {
                 Logger.LogWarning("OpenAI did not return a response to starting dialogue.");
                 return; // may be rate limited 
             }
-            
+
             var userNameUserIdMap = GenerateUserNameUserIdMap(history);
             userNameUserIdMap[name] = userId;
-            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap);
+            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap, out _);
             await textChannel.SendMessageAsync(response).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -293,4 +296,40 @@ private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordM
         base.Dispose();
     }
 
+    private async Task<List<JoinedTextChannel>> GetTextChannels()
+    {
+        List<JoinedTextChannel> channels = new();
+        foreach(var server in Client.Guilds)
+        {
+            await server.DownloadUsersAsync();
+            foreach(var channel in server.Channels)
+            {
+                if(channel.ChannelType == ChannelType.Text)
+                {
+                    var cache = new JoinedTextChannel($"{server.Name} -> {channel.Name}", channel.Id, 
+                        GetChannelUsers(channel));
+
+                    channels.Add(cache);
+                }
+            }
+        }
+        return channels;
+    }
+
+    private List<ChannelUser> GetChannelUsers(SocketGuildChannel channel)
+    {
+        List<ChannelUser> users = new();
+        
+        foreach(var user in channel.Users)
+        {
+            var displayName = GetDisplayName(user);
+            var openAIName = OpenAIService.IsValidName(displayName) ? displayName : OpenAIService.SanitizeName(displayName);
+            users.Add(new ChannelUser(displayName, user.Id, openAIName));
+        }
+        return users;
+    }
 }
+
+public record JoinedTextChannel(string Name, ulong Id, List<ChannelUser> Users);
+
+public record ChannelUser(string Name, ulong Id, string OpenAIName);
