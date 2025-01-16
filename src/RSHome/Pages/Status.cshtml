@@ -78,15 +78,15 @@ else if (!string.IsNullOrEmpty(Model.Message))
         <select id="userId" name="userId" required>
             @foreach (var user in Model.SelectedChannelUsers)
             {
-                <option value="@user.Id">@user.Name - (@user.OpenAIName)</option>
+                <option value="@user.Id">@user.Name - (@user.CanonicalName)</option>
             }
         </select>
     </fieldset>
     <fieldset>
         <label for="messages">Anzahl an Nachrichten:</label>
-        <input type="number" id="messages" name="messages" />
+        <input type="number" id="messages" name="messages" value="3" />
     </fieldset>
     }
     <input type="hidden" id="startDialogue" name="startDialogue" value="true" />
-    <button type="submit">Submit</button>
+    <button type="submit">Weiter</button>
 </form>

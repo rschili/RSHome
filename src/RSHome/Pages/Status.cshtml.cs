@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RSHome.Services;
+using RSHome.Models;
+using System.Collections.Immutable;
 
 public class StatusModel : PageModel
 {
@@ -10,11 +12,9 @@ public class StatusModel : PageModel
 
     public string? Message { get; set; }
 
-    public bool MessageIsError { get; set; } = false;
+    public ImmutableArray<JoinedTextChannel<ulong>> TextChannels { get; set;} = new();
 
-    public List<JoinedTextChannel> TextChannels { get; set;} = new();
-
-    public List<ChannelUser>? SelectedChannelUsers { get; set; } = null;
+    public ImmutableArray<ChannelUser<ulong>>? SelectedChannelUsers { get; set; } = null;
     public ulong? SelectedChannelId { get; set; } = null;
 
     //public bool MatrixRunning => MatrixWorkerService.IsRunning;
@@ -44,50 +44,37 @@ public class StatusModel : PageModel
 
     private IActionResult PostStartDialogue()
     {
-        var channel = Request.Form["channel"];
-        if (string.IsNullOrWhiteSpace(channel) || !ulong.TryParse(channel, out var channelId))
+        var channelField = Request.Form["channel"];
+        if (string.IsNullOrWhiteSpace(channelField) || !ulong.TryParse(channelField, out var channelId))
         {
-            Message = "Channel is required.";
-            MessageIsError = true;
+            ModelState.AddModelError("channel", "Channel is required.");
             return Page();
         }
 
         var validatedChannel = TextChannels.FirstOrDefault(c => c.Id == channelId);
         if (validatedChannel == null)
         {
-            Message = "Channel is invalid.";
-            MessageIsError = true;
+            ModelState.AddModelError("channel", "Channel is invalid.");
             return Page();
         }
 
         SelectedChannelUsers = validatedChannel.Users;
         SelectedChannelId = validatedChannel.Id;
 
-        var selectedUser = Request.Form["userId"];
-        if (string.IsNullOrWhiteSpace(selectedUser) || !ulong.TryParse(selectedUser, out var userId))
+        var userField = Request.Form["userId"];
+        if (string.IsNullOrWhiteSpace(userField) || !ulong.TryParse(userField, out var userId))
         {
+            Message = "Bitte ein Ziel wählen.";
             return Page();
         }
-/*        var userId = Request.Form["userid"];
-        var messages = Request.Form["messages"];
-        var channelId = Request.Form["channelid"];
-
-        if (string.IsNullOrWhiteSpace(name))
-            ModelState.AddModelError("name", "Name is required.");
-
-        if (!ulong.TryParse(userId, out ulong userIdValue))
-            ModelState.AddModelError("userid", "User ID is required and must be a valid unsigned integer.");
-
-        if (!int.TryParse(messages, out int messagesCount))
-            ModelState.AddModelError("messages", "Number of Messages must be a valid number.");
-
-        if (!ulong.TryParse(channelId, out ulong channelIdValue))
-            ModelState.AddModelError("channelid", "Channel ID is required and must be a valid unsigned integer.");
-
-        if (!ModelState.IsValid)
+        var messagesField = Request.Form["messages"];
+        if (string.IsNullOrWhiteSpace(messagesField) || !int.TryParse(messagesField, out var messagesCount))
+        {
+            ModelState.AddModelError("messages", "Nachrichtenanzahl ist erforderlich.");
             return Page();
+        }
 
-        _ = Task.Run(() => DiscordWorkerService.StartDialogueAsync(name!, userIdValue, channelIdValue, messagesCount).ConfigureAwait(false))
+        _ = Task.Run(() => DiscordWorkerService.StartDialogueAsync(channelId, userId, messagesCount).ConfigureAwait(false))
             .ContinueWith(task =>
             {
                 if (task.Exception != null)
@@ -95,7 +82,7 @@ public class StatusModel : PageModel
                     // Log the exception (assuming you have a logger, replace 'Logger' with your actual logger instance)
                     DiscordWorkerService.Logger.LogError(task.Exception, "An error occurred while starting the dialogue.");
                 }
-            }, TaskContinuationOptions.OnlyOnFaulted);*/
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
         return Page();
     }

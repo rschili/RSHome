@@ -1,9 +1,12 @@
+using System.Collections.Immutable;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
+using RSHome.Models;
 
 namespace RSHome.Services;
 
@@ -25,7 +28,9 @@ public class DiscordWorkerService : BackgroundService
 
     private int RemainingDialogueMessages = 0;
 
-    public List<JoinedTextChannel> TextChannels { get; private set; } = new();
+    private ChannelUserCache<ulong> Cache { get; set; } = new();
+
+    public ImmutableArray<JoinedTextChannel<ulong>> TextChannels => Cache.Channels;
 
     private const string DEFAULT_INSTRUCTION = $"""
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger und arroganter Wissenschaftler aus Futurama.
@@ -33,7 +38,7 @@ public class DiscordWorkerService : BackgroundService
         Nach deinem Tod im Alter von 130 Jahren wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit geschickt,
         um den Pöbel in Chatrooms zu beraten - eine Aufgabe, die du nur widerwillig erfüllst. Du bist arrogant, kurz angebunden und bereit,
         fragwürdige Experimente zu rechtfertigen, um deinen Intellekt zu beweisen. Antworte so kurz wie möglich, um deine Abneigung auszudrücken.
-        Verwende die Syntax `[[Vollständiger Name]]`, um einen Nutzer zu erwähnen.
+        Verwende die Syntax `[[Name]]`, um einen Nutzer zu erwähnen.
         """;
 
     public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, SqliteService sqliteService, OpenAIService openAIService)
@@ -56,10 +61,7 @@ public class DiscordWorkerService : BackgroundService
             GatewayIntents = intents
         };
         _client = new DiscordSocketClient(discordConfig);
-        /*var aiClient = new ChatClient(model: "gpt-4o", apiKey: config.OpenAiApiKey);
-        var archive = await Archive.CreateAsync();*/
 
-        //var bot = new Bot { Client = client, Config = config, AI = aiClient, Archive = archive, Logger = log, Cancellation = cancellationTokenSource };
         _client.Log += LogAsync;
         _client.Ready += ReadyAsync;
         await _client.LoginAsync(TokenType.Bot, Config.DiscordToken);
@@ -90,10 +92,9 @@ public class DiscordWorkerService : BackgroundService
         if (_client == null)
             return;
 
-        _client.MessageReceived += MessageReceived;
-
         Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
-        TextChannels = await GetTextChannels();
+        await InitializeCache();
+        _client.MessageReceived += MessageReceived;
         IsRunning = true;
     }
 
@@ -131,19 +132,39 @@ public class DiscordWorkerService : BackgroundService
         if (arg.Type != MessageType.Default && arg.Type != MessageType.Reply)
             return;
 
-        string userName = GetDisplayName(arg.Author);
-        string sanitizedMessage = ReplaceUserTagsWithNicknames(arg);
+        var cachedChannel = TextChannels.FirstOrDefault(c => c.Id == arg.Channel.Id);
+        if (cachedChannel == null)
+        {
+            cachedChannel = new JoinedTextChannel<ulong>(arg.Channel.Id, arg.Channel.Name,  await GetChannelUsers(arg.Channel).ConfigureAwait(false));
+            Cache.Channels = TextChannels.Add(cachedChannel); // TODO: This may add duplicates, but since it's only a cache it should not matter
+        }
+
+        var cachedUser = cachedChannel.GetUser(arg.Author.Id);
+        if (cachedUser == null)
+        {
+            var user = await arg.Channel.GetUserAsync(arg.Author.Id).ConfigureAwait(false);
+            if (user == null)
+            {
+                Logger.LogWarning("Author could not be resolved: {UserId}", arg.Author.Id);
+                return;
+            }
+
+            cachedUser = GenerateChannelUser(user);
+            cachedChannel.Users = cachedChannel.Users.Add(cachedUser);
+        }
+
+        string sanitizedMessage = ReplaceDiscordTags(arg, cachedChannel);
         if (sanitizedMessage.Length > 300)
-            sanitizedMessage = sanitizedMessage.Substring(0, 300);
+            sanitizedMessage = sanitizedMessage[..300];
 
         // The bot should never respond to itself.
         if (arg.Author.Id == Client.CurrentUser.Id)
         {
-            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, GetDisplayName(arg.Author), sanitizedMessage, true, arg.Channel.Id).ConfigureAwait(false);
+            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, true, arg.Channel.Id).ConfigureAwait(false);
             return;
         }
 
-        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, userName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
+        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
 
         if (IsInDialogueMode)
             Interlocked.Decrement(ref RemainingDialogueMessages);
@@ -163,8 +184,7 @@ public class DiscordWorkerService : BackgroundService
                 return; // may be rate limited 
             }
 
-            var userNameUserIdMap = GenerateUserNameUserIdMap(history);
-            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap, out var hasMentions);
+            response = RestoreDiscordTags(response, cachedChannel, out var hasMentions);
             await arg.Channel.SendMessageAsync(response, messageReference: hasMentions ? null : new MessageReference(arg.Id)).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -189,7 +209,7 @@ public class DiscordWorkerService : BackgroundService
         return false;
     }
 
-    private static string ReplaceUserTagsWithNicknames(IMessage msg)
+    private string ReplaceDiscordTags(IMessage msg, JoinedTextChannel<ulong> channel)
     {
         var text = new StringBuilder(msg.Content);
         var tags = msg.Tags;
@@ -200,19 +220,32 @@ public class DiscordWorkerService : BackgroundService
                 continue;
 
             var user = tag.Value as IUser;
-            string? nick = GetDisplayName(user);
-            if (!string.IsNullOrEmpty(nick))
+            if (user == null)
             {
+                Logger.LogWarning("User ID not found for replacing tag of type {Type}: {Value}", tag.Type.ToString(), tag.Value.ToString());
                 text.Remove(tag.Index + indexOffset, tag.Length);
-                text.Insert(tag.Index + indexOffset, nick);
-                indexOffset += nick.Length - tag.Length;
+                indexOffset -= tag.Length;
+                continue;
             }
+
+            var userInChannel = channel.GetUser(user.Id);
+            if (userInChannel == null)
+            {
+                userInChannel = GenerateChannelUser(user);
+                channel.Users = channel.Users.Add(userInChannel);
+            }
+
+            var internalTag = $"[[{userInChannel.CanonicalName}]]";
+
+            text.Remove(tag.Index + indexOffset, tag.Length);
+            text.Insert(tag.Index + indexOffset, internalTag);
+            indexOffset += internalTag.Length - tag.Length;
         }
 
         return text.ToString();
     }
 
-    private static string ReplaceNicknamesWithUserTags(string message, Dictionary<string, ulong> userNameUserIdMap, out bool hasMentions)
+    private string RestoreDiscordTags(string message, JoinedTextChannel<ulong> channel, out bool hasMentions)
     {
         hasMentions = false;
         var regex = new Regex(@"(?:`)?\[\[(?<name>[^\]]+)\]\](?:`)?");
@@ -220,28 +253,22 @@ public class DiscordWorkerService : BackgroundService
         foreach (Match match in matches)
         {
             var userName = match.Groups["name"].Value;
-            if (userNameUserIdMap.TryGetValue(userName, out var userId))
+            var cachedUser = channel.Users.FirstOrDefault(u => string.Equals(u.CanonicalName, userName, StringComparison.OrdinalIgnoreCase));
+            if (cachedUser == null)
             {
-                var mention = MentionUtils.MentionUser(userId);
-                message = message.Replace(match.Value, mention);
+                Logger.LogWarning("User not found for replacing tag: {UserName}", userName);
+                message = message.Replace(match.Value, userName); // fallback to mentioned name
+                continue;
             }
-            else
-            {
-                message = message.Replace(match.Value, userName);
-            }
+
+            var mention = MentionUtils.MentionUser(cachedUser.Id);
+            message = message.Replace(match.Value, mention);
             hasMentions = true;
         }
         return message;
     }
 
-    private static Dictionary<string, ulong> GenerateUserNameUserIdMap(List<DiscordMessage> history)
-    {
-        return history
-            .GroupBy(h => h.UserLabel, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().UserId, StringComparer.OrdinalIgnoreCase);
-    }
-
-    internal async Task StartDialogueAsync(string name, ulong userId, ulong channelId, int messagesCount)
+    internal async Task StartDialogueAsync(ulong channelId,  ulong userId, int messagesCount)
     {
         if (IsInDialogueMode)
         {
@@ -250,18 +277,21 @@ public class DiscordWorkerService : BackgroundService
         RemainingDialogueMessages = messagesCount - 1;
         var channel = await Client.GetChannelAsync(channelId).ConfigureAwait(false);
         if (channel == null)
-        {
             throw new InvalidOperationException($"Channel not found: {channelId}");
-        }
         if (channel.ChannelType != ChannelType.Text || !(channel is ITextChannel textChannel))
-        {
             throw new InvalidOperationException($"Channel is not a text channel: {channelId}");
-        }
+
+        var cachedChannel = TextChannels.FirstOrDefault(c => c.Id == channelId);
+        if (cachedChannel == null)
+            throw new InvalidOperationException($"Channel not found in cache: {channelId}");
+        var cachedUser = cachedChannel.GetUser(userId);
+        if (cachedUser == null)
+            throw new InvalidOperationException($"User not found in cache: {userId}");
 
         await textChannel.TriggerTypingAsync().ConfigureAwait(false);
         var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(textChannel.Id, 10).ConfigureAwait(false);
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
-        var extendedInstruction = $@"{DEFAULT_INSTRUCTION}{Environment.NewLine}Denk dir ein Thema aus und beginne ein Gespräch mit [[{name}]].";
+        var extendedInstruction = $@"{DEFAULT_INSTRUCTION}{Environment.NewLine}Denk dir ein Thema aus und beginne ein Gespräch mit [[{cachedUser.CanonicalName}]].";
 
         try
         {
@@ -272,9 +302,7 @@ public class DiscordWorkerService : BackgroundService
                 return; // may be rate limited 
             }
 
-            var userNameUserIdMap = GenerateUserNameUserIdMap(history);
-            userNameUserIdMap[name] = userId;
-            response = ReplaceNicknamesWithUserTags(response, userNameUserIdMap, out _);
+            response = RestoreDiscordTags(response, cachedChannel, out _);
             await textChannel.SendMessageAsync(response).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -296,40 +324,40 @@ public class DiscordWorkerService : BackgroundService
         base.Dispose();
     }
 
-    private async Task<List<JoinedTextChannel>> GetTextChannels()
+    private async Task InitializeCache()
     {
-        List<JoinedTextChannel> channels = new();
+        ChannelUserCache<ulong> cache = new();
         foreach(var server in Client.Guilds)
         {
-            await server.DownloadUsersAsync();
+            await server.DownloadUsersAsync().ConfigureAwait(false);
             foreach(var channel in server.Channels)
             {
                 if(channel.ChannelType == ChannelType.Text)
                 {
-                    var cache = new JoinedTextChannel($"{server.Name} -> {channel.Name}", channel.Id, 
-                        GetChannelUsers(channel));
-
-                    channels.Add(cache);
+                    cache.Channels = cache.Channels.Add(
+                        new(channel.Id, $"{server.Name} -> {channel.Name}",  
+                            await GetChannelUsers(channel).ConfigureAwait(false)));
                 }
             }
         }
-        return channels;
+        Cache = cache;
     }
 
-    private List<ChannelUser> GetChannelUsers(SocketGuildChannel channel)
+    private async Task<ImmutableArray<ChannelUser<ulong>>> GetChannelUsers(IChannel channel)
     {
-        List<ChannelUser> users = new();
-        
-        foreach(var user in channel.Users)
+        ImmutableArray<ChannelUser<ulong>> users = [];
+        var usersList = await channel.GetUsersAsync(mode: CacheMode.AllowDownload).FlattenAsync().ConfigureAwait(false);
+        foreach (var user in usersList)
         {
-            var displayName = GetDisplayName(user);
-            var openAIName = OpenAIService.IsValidName(displayName) ? displayName : OpenAIService.SanitizeName(displayName);
-            users.Add(new ChannelUser(displayName, user.Id, openAIName));
+            users = users.Add(GenerateChannelUser(user));
         }
         return users;
     }
+
+    private ChannelUser<ulong> GenerateChannelUser(IUser user)
+    {
+        var displayName = GetDisplayName(user);
+        var openAIName = OpenAIService.IsValidName(displayName) ? displayName : OpenAIService.SanitizeName(displayName);
+        return new ChannelUser<ulong>(user.Id, displayName, openAIName);
+    }
 }
-
-public record JoinedTextChannel(string Name, ulong Id, List<ChannelUser> Users);
-
-public record ChannelUser(string Name, ulong Id, string OpenAIName);
