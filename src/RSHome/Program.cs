@@ -31,8 +31,8 @@ builder.Services
     .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())
-    /*.AddSingleton<MatrixWorkerService>()
-    .AddHostedService(p => p.GetRequiredService<MatrixWorkerService>())*/
+    .AddSingleton<MatrixWorkerService>()
+    .AddHostedService(p => p.GetRequiredService<MatrixWorkerService>())
     .AddRazorPages(options => {
         options.RootDirectory = "/Pages";
         options.Conventions.AuthorizeFolder("/", "admin");

@@ -51,6 +51,11 @@ public class DiscordWorkerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if(!Config.DiscordEnable)
+        {
+            Logger.LogInformation("Discord is disabled.");
+            return;
+        }
         var intents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent | GatewayIntents.GuildMembers;
         intents &= ~GatewayIntents.GuildInvites;
         intents &= ~GatewayIntents.GuildScheduledEvents;

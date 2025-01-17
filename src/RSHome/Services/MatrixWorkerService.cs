@@ -23,6 +23,11 @@ public class MatrixWorkerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if(!Config.MatrixEnable)
+        {
+            Logger.LogInformation("Matrix is disabled.");
+            return;
+        }
         if (IsRunning)
         {
             Logger.LogWarning("Matrix worker service is already running.");

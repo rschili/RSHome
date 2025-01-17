@@ -5,36 +5,40 @@
 <p>@DateTime.Now.ToString("f")!</p>
 
 <table>
+    <thead
     <tr>
-        <th>Service</th>
-        <th>Status</th>
+        <th scope="col">Service</th>
+        <th scope="col">Status</th>
     </tr>
-    @* <tr>
+    </thead>
+    <tbody>
+    <tr>
         <td>Matrix</td>
         <td>
             @if (Model.MatrixRunning)
             {
-                <span>Running</span>
+                <ins>Läuft</ins>
             }
             else
             {
-                <span>Not Running</span>
+                <del>Läuft nicht!</del>
             }
         </td>
-    </tr> *@
+    </tr>
     <tr>
         <td>Discord</td>
         <td>
             @if (Model.DiscordRunning)
             {
-                <span>Läuft</span>
+                <ins>Läuft</ins>
             }
             else
             {
-                <span>Läuft nicht!</span>
+                <del>Läuft nicht!</del>
             }
         </td>
     </tr>
+    </tbody>
 </table>
 
 <h1>Discord Dialog</h1>

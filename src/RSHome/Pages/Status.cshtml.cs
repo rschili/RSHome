@@ -8,7 +8,7 @@ public class StatusModel : PageModel
 {
     public IConfigService Config { get; init; }
     public DiscordWorkerService DiscordWorkerService { get; init; }
-    //public MatrixWorkerService MatrixWorkerService { get; init; }
+    public MatrixWorkerService MatrixWorkerService { get; init; }
 
     public string? Message { get; set; }
 
@@ -17,15 +17,15 @@ public class StatusModel : PageModel
     public ImmutableArray<ChannelUser<ulong>>? SelectedChannelUsers { get; set; } = null;
     public ulong? SelectedChannelId { get; set; } = null;
 
-    //public bool MatrixRunning => MatrixWorkerService.IsRunning;
+    public bool MatrixRunning => MatrixWorkerService.IsRunning;
 
     public bool DiscordRunning => DiscordWorkerService.IsRunning;
 
-    public StatusModel(IConfigService config, DiscordWorkerService discordWorkerService)//, MatrixWorkerService matrixWorkerService)
+    public StatusModel(IConfigService config, DiscordWorkerService discordWorkerService, MatrixWorkerService matrixWorkerService)
     {
         Config = config;
         DiscordWorkerService = discordWorkerService;
-        //MatrixWorkerService = matrixWorkerService;
+        MatrixWorkerService = matrixWorkerService;
         TextChannels = DiscordWorkerService.TextChannels;
     }
 

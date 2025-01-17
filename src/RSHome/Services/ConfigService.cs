@@ -13,6 +13,8 @@ public interface IConfigService
     string OpenAiApiKey { get; }
     string MatrixUserId { get; }
     string MatrixPassword { get; }
+    bool DiscordEnable { get; }
+    bool MatrixEnable { get; }
     string SeqApiKey { get; }
     string SeqUrl { get; }
     string WebLoginHash { get; }
@@ -30,6 +32,8 @@ public enum EnvVar
     OPENAI_API_KEY,
     MATRIX_USER_ID,
     MATRIX_PASSWORD,
+    DISCORD_ENABLE,
+    MATRIX_ENABLE,
     SEQ_API_KEY,
     SEQ_URL,
     WEB_LOGIN_HASH,
@@ -48,6 +52,8 @@ public class ConfigService : IConfigService
     public string OpenAiApiKey => _variables[EnvVar.OPENAI_API_KEY];
     public string MatrixUserId => _variables[EnvVar.MATRIX_USER_ID];
     public string MatrixPassword => _variables[EnvVar.MATRIX_PASSWORD];
+    public bool DiscordEnable => bool.Parse(_variables[EnvVar.DISCORD_ENABLE]);
+    public bool MatrixEnable => bool.Parse(_variables[EnvVar.MATRIX_ENABLE]);
     public string SeqApiKey => _variables[EnvVar.SEQ_API_KEY];
     public string SeqUrl => _variables[EnvVar.SEQ_URL];
     public string WebLoginHash => _variables[EnvVar.WEB_LOGIN_HASH];

@@ -4,7 +4,7 @@ namespace RSHome.Models;
 
 public class ChannelUserCache<T>
 {
-    public ImmutableArray<JoinedTextChannel<T>> Channels { get; set; }
+    public ImmutableArray<JoinedTextChannel<T>> Channels { get; set; } = [];
 }
 
 public class JoinedTextChannel<T>
