@@ -15,7 +15,6 @@ public class DiscordWorkerService : BackgroundService
     public ILogger Logger { get; init; }
     private IConfigService Config { get; init; }
     private SqliteService SqliteService { get; init; }
-
     private OpenAIService OpenAIService { get; init; }
 
     public bool IsRunning { get; private set; }
@@ -162,14 +161,11 @@ public class DiscordWorkerService : BackgroundService
         if (sanitizedMessage.Length > 300)
             sanitizedMessage = sanitizedMessage[..300];
 
+        var isFromSelf = arg.Author.Id == Client.CurrentUser.Id;
+        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, isFromSelf, arg.Channel.Id).ConfigureAwait(false);
         // The bot should never respond to itself.
-        if (arg.Author.Id == Client.CurrentUser.Id)
-        {
-            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, true, arg.Channel.Id).ConfigureAwait(false);
+        if (isFromSelf)
             return;
-        }
-
-        await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
 
         if (IsInDialogueMode)
             Interlocked.Decrement(ref RemainingDialogueMessages);
