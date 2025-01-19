@@ -107,25 +107,17 @@ public class MatrixWorkerService : BackgroundService
                 sanitizedMessage = sanitizedMessage[..300];
 
             var isFromSelf = message.Sender.User.UserId.Full == _client!.CurrentUser.Full;
-            await SqliteService.AddMatrixMessageAsync(message.)
+            await SqliteService.AddMatrixMessageAsync(message.EventId, message.Timestamp,
+                message.Sender.User.UserId.Full, cachedUser.CanonicalName, sanitizedMessage, isFromSelf,
+                message.Room.RoomId.Full).ConfigureAwait(false);
             // The bot should never respond to itself.
             if (isFromSelf)
-            {
-                await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, true, arg.Channel.Id).ConfigureAwait(false);
-                return;
-            }
-
-            await SqliteService.AddDiscordMessageAsync(arg.Id, arg.Timestamp, arg.Author.Id, cachedUser.CanonicalName, sanitizedMessage, false, arg.Channel.Id).ConfigureAwait(false);
-
-            if (IsInDialogueMode)
-                Interlocked.Decrement(ref RemainingDialogueMessages);
-            else if (!ShouldRespond(arg))
                 return;
 
-            await arg.Channel.TriggerTypingAsync().ConfigureAwait(false);
-            var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 10).ConfigureAwait(false);
-            var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
+            if(!ShouldRespond(message, sanitizedMessage))
+                return;
 
+            await RespondToMessage(message, cachedChannel, sanitizedMessage).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -133,8 +125,13 @@ public class MatrixWorkerService : BackgroundService
         }
     }
 
-    public async Task RespondToMessage()
+    public async Task RespondToMessage(ReceivedTextMessage message, JoinedTextChannel<string> channel, string sanitizedMessage)
     {
+        await message.Room.SendTypingNotificationAsync(2000).ConfigureAwait(false);
+
+        var history = await SqliteService.GetLastMatrixMessagesForRoomAsync(channel.Id, 10).ConfigureAwait(false);
+        //TODO: Matrix does not return own messages, so we need to add them manually
+        var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
         var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
         if (string.IsNullOrEmpty(response))
         {
@@ -160,5 +157,21 @@ public class MatrixWorkerService : BackgroundService
     private string SanitizeMessage(ReceivedTextMessage message, JoinedTextChannel<string> cachedChannel)
     {
         return message.Body!;
+    }
+
+    private bool ShouldRespond(ReceivedTextMessage message, string sanitizedMessage)
+    {
+        if (arg.Author.IsBot)
+            return false;
+
+        //mentions
+        if (arg.Tags.Any((tag) => tag.Type == TagType.UserMention && (tag.Value as IUser)?.Id == Client.CurrentUser.Id))
+            return true;
+
+        if (arg.Reference != null && arg is SocketUserMessage userMessage &&
+            userMessage.ReferencedMessage.Author.Id == Client.CurrentUser.Id)
+            return true;
+
+        return false;
     }
 }
