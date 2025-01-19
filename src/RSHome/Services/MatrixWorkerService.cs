@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Hosting;
+using Org.BouncyCastle.Utilities.IO;
 using RSHome.Models;
 using RSMatrix;
 using RSMatrix.Models;
@@ -75,7 +77,7 @@ public class MatrixWorkerService : BackgroundService
 
     private async Task MessageReceivedAsync(ReceivedTextMessage message)
     {
-        if(!IsRunning)
+        if (!IsRunning)
             return;
 
         try
@@ -102,7 +104,9 @@ public class MatrixWorkerService : BackgroundService
                 cachedChannel.Users = cachedChannel.Users.Add(cachedUser);
             }
 
-            string sanitizedMessage = SanitizeMessage(message, cachedChannel);
+            string? sanitizedMessage = SanitizeMessage(message, cachedChannel);
+            if (sanitizedMessage == null)
+                return;
             if (sanitizedMessage.Length > 300)
                 sanitizedMessage = sanitizedMessage[..300];
 
@@ -114,7 +118,7 @@ public class MatrixWorkerService : BackgroundService
             if (isFromSelf)
                 return;
 
-            if(!ShouldRespond(message, sanitizedMessage))
+            if (!ShouldRespond(message, sanitizedMessage))
                 return;
 
             await RespondToMessage(message, cachedChannel, sanitizedMessage).ConfigureAwait(false);
@@ -135,16 +139,12 @@ public class MatrixWorkerService : BackgroundService
         var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
         if (string.IsNullOrEmpty(response))
         {
-            Logger.LogWarning($"OpenAI did not return a response to: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}");
+            Logger.LogWarning($"OpenAI did not return a response to: {sanitizedMessage[..50]}");
             return; // may be rate limited 
         }
 
-        response = RestoreDiscordTags(response, cachedChannel, out var hasMentions);
-        await arg.Channel.SendMessageAsync(response, messageReference: hasMentions ? null : new MessageReference(arg.Id)).ConfigureAwait(false);
-
-        await message.Room.SendTypingNotificationAsync().ConfigureAwait(false);
-        await Task.Delay(2000).ConfigureAwait(false);
-        await message.SendResponseAsync("pong!").ConfigureAwait(false);
+        response = HandleMentions(response, channel); // TODO: Wire up mentions in response
+        await message.SendResponseAsync(response).ConfigureAwait(false); // TODO, log here?
     }
 
     private static ChannelUser<string> GenerateChannelUser(RoomUser user)
@@ -154,24 +154,69 @@ public class MatrixWorkerService : BackgroundService
         return new ChannelUser<string>(user.User.UserId.Full, displayName, openAIName);
     }
 
-    private string SanitizeMessage(ReceivedTextMessage message, JoinedTextChannel<string> cachedChannel)
+    private string? SanitizeMessage(ReceivedTextMessage message, JoinedTextChannel<string> cachedChannel)
     {
-        return message.Body!;
+        if (message == null || message.Body == null)
+            return null;
+
+        string text = message.Body;
+        text = Regex.Unescape(text);
+
+        // Check for wordle messages
+        string[] invalidStrings = { "🟨", "🟩", "⬛", "🟦", "⬜", "➡️", "📍", "🗓️", "🥇", "🥈", "🥉" };
+        if (invalidStrings.Any(text.Contains))
+            return null;
+
+        // Remove markdown style quotes
+        text = Regex.Replace(text, @"^>.*$", string.Empty, RegexOptions.Multiline);
+
+        // Replace mentions by [[canonicalName]]
+        if (message.Mentions != null)
+        {
+            foreach (var mention in message.Mentions)
+            {
+                var user = cachedChannel.GetUser(mention.User.UserId.Full);
+                if (user == null)
+                    continue;
+
+                var mentionPattern = $@"(?<!\[){Regex.Escape(mention.GetDisplayName())}(?!\])";
+                text = Regex.Replace(text, mentionPattern, $"[[{user.CanonicalName}]]", RegexOptions.IgnoreCase);
+            }
+        }
+
+        return text;
     }
 
     private bool ShouldRespond(ReceivedTextMessage message, string sanitizedMessage)
     {
-        if (arg.Author.IsBot)
-            return false;
+        if (message.Sender.User.UserId.Full.Equals("@armleuchter:matrix.dnix.de", StringComparison.OrdinalIgnoreCase) ||
+            message.Sender.User.UserId.Full.Equals("@flokati:matrix.dnix.de", StringComparison.OrdinalIgnoreCase))
+            return false; // Do not respond to the bots
 
-        //mentions
-        if (arg.Tags.Any((tag) => tag.Type == TagType.UserMention && (tag.Value as IUser)?.Id == Client.CurrentUser.Id))
+        if (Regex.IsMatch(sanitizedMessage, @"\bStoll\b", RegexOptions.IgnoreCase))
             return true;
 
-        if (arg.Reference != null && arg is SocketUserMessage userMessage &&
-            userMessage.ReferencedMessage.Author.Id == Client.CurrentUser.Id)
-            return true;
+        if (message.Mentions != null)
+        {
+            foreach (var mention in message.Mentions)
+            {
+                if (mention.User.UserId.Full.Equals(_client!.CurrentUser.Full, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
 
         return false;
+    }
+
+    private string HandleMentions(string response, JoinedTextChannel<string> cachedChannel)
+    {
+        // replace [[canonicalName]] with DisplayName using a regex lookup
+        var mentionPattern = @"\[\[(.*?)\]\]";
+        return Regex.Replace(response, mentionPattern, match =>
+        {
+            var canonicalName = match.Groups[1].Value;
+            var user = cachedChannel.Users.FirstOrDefault(u => string.Equals(u.CanonicalName, canonicalName, StringComparison.OrdinalIgnoreCase));
+            return user != null ? user.Name : canonicalName;
+        });
     }
 }
