@@ -27,7 +27,7 @@ public class OpenAIService
 
         var options = new ChatCompletionOptions
         {
-            MaxOutputTokenCount = 100,
+            MaxOutputTokenCount = 150,
             ResponseFormat = ChatResponseFormat.CreateTextFormat(),
         };
 
@@ -50,26 +50,28 @@ public class OpenAIService
             }
             else
             {
-                var message = ChatMessage.CreateUserMessage(input.Message);
+                var message = ChatMessage.CreateUserMessage($"({input.ParticipantName}) {input.Message}");
                 if (input.ParticipantName != null)
                     message.ParticipantName = participantName;
-                instructions.Add($"({input.ParticipantName}) {message}");
+                instructions.Add(message);
             }
         }
 
         try
         {
             var response = await Client.CompleteChatAsync(instructions, options).ConfigureAwait(false);
-            if (response.Value.FinishReason != ChatFinishReason.Stop)
+            bool isLengthFinishReason = response.Value.FinishReason == ChatFinishReason.Length;
+            if (!isLengthFinishReason && response.Value.FinishReason != ChatFinishReason.Stop)
             {
                 Logger.LogWarning($"OpenAI call did not finish with Stop. Value was {response.Value.FinishReason}");
                 return null;
             }
+
             Logger.LogInformation("OpenAI call completed. Total Token Count: {TokenCount}.", response.Value.Usage.TotalTokenCount);
             foreach (var content in response.Value.Content)
             {
                 if (content.Kind != ChatMessageContentPartKind.Text || !string.IsNullOrEmpty(content.Text))
-                    return content.Text;
+                    return content.Text + (isLengthFinishReason ? "... (Tokenlimit erreicht)" : string.Empty);
             }
 
             Logger.LogWarning("OpenAI call did not return any text content.");

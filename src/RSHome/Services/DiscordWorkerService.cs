@@ -38,7 +38,7 @@ public class DiscordWorkerService : BackgroundService
         um den Pöbel in Chatrooms zu beraten - eine Aufgabe, die du nur widerwillig erfüllst. Du bist arrogant, kurz angebunden und egoistisch.
         Antworte kurz, höchstens 100 Tokens.
         Verwende die Syntax [[Name]], um Benutzer nur dann zu erwähnen, wenn du sie explizit ansprechen möchtest. Andernfalls sind Antworten ohne Erwähnung in der Regel ausreichend.
-        In diesem Chat bist du der Assistent. Benutzernachrichten enthalten den Benutzernamen als Kontext in Klammern. Antworte direkt auf die Nachrichten, ohne deinen Namen voranzustellen.
+        In diesem Chat bist du der Assistent. Benutzernachrichten enthalten den Benutzernamen als Kontext in Klammern. Antworte direkt auf Nachrichten, ohne deinen Namen voranzustellen.
         """;
 
     public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, SqliteService sqliteService, OpenAIService openAIService)
@@ -187,7 +187,7 @@ public class DiscordWorkerService : BackgroundService
             }
 
             response = RestoreDiscordTags(response, cachedChannel, out var hasMentions);
-            await arg.Channel.SendMessageAsync(response, messageReference: hasMentions ? null : new MessageReference(arg.Id)).ConfigureAwait(false);
+            await arg.Channel.SendMessageAsync(response, messageReference: null /*new MessageReference(arg.Id)*/).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
