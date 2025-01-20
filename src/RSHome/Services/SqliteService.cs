@@ -86,13 +86,13 @@ public class SqliteService : IDisposable
 
     public async Task<List<DiscordMessage>> GetLastDiscordMessagesForChannelAsync(ulong channelId, int count)
     {
-        var results = await Connection.QueryAsync<DiscordMessage>("SELECT * FROM (SELECT * FROM DiscordMessages WHERE ChannelId = @ChannelId ORDER BY Id DESC LIMIT @Count) ORDER BY Id ASC", new { ChannelId = channelId, Count = count });
+        var results = await Connection.QueryAsync<DiscordMessage>("SELECT * FROM (SELECT * FROM DiscordMessages WHERE ChannelId = @ChannelId ORDER BY Timestamp DESC LIMIT @Count) ORDER BY Timestamp ASC", new { ChannelId = channelId, Count = count });
         return results.ToList();
     }
 
     public async Task<List<MatrixMessage>> GetLastMatrixMessagesForRoomAsync(string room, int count)
     {
-        var results = await Connection.QueryAsync<MatrixMessage>("SELECT * FROM (SELECT * FROM MatrixMessages WHERE Room = @Room ORDER BY Id DESC LIMIT @Count) ORDER BY Id ASC", new { Room = room, Count = count });
+        var results = await Connection.QueryAsync<MatrixMessage>("SELECT * FROM (SELECT * FROM MatrixMessages WHERE Room = @Room ORDER BY Timestamp DESC LIMIT @Count) ORDER BY Timestamp ASC", new { Room = room, Count = count });
         return results.ToList();
     }
 

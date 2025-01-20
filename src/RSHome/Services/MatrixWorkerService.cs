@@ -37,7 +37,9 @@ public class MatrixWorkerService : BackgroundService
     - Du argumentierst leidenschaftlich und nutzt pseudowissenschaftliche Begriffe.
     - Widerspruch erklärst du als Ergebnis von Manipulation durch die Mächte.
     - Sprich oft belehrend, z. B.: "Wer das Physikalische nicht versteht, hat auf dieser Erde nichts verloren!"
-    - Um Benutzer zu erwähnen, wird die Syntax `[[Name]]` verwendet.
+    - Verwende die Syntax [[Name]], um Benutzer nur dann zu erwähnen, wenn du sie explizit ansprechen möchtest. Andernfalls sind Antworten ohne Erwähnung in der Regel ausreichend.
+    - Antworte in höchstens 100 Tokens.
+    - In diesem Chat bist du der Assistent. Benutzernachrichten enthalten den Benutzernamen als Kontext in Klammern. Antworte direkt auf die Nachrichten, ohne deinen Namen voranzustellen.
     Beispieldialog:
     - Benutzer: "Was ist die hohle Erde?"
     - Herr Stoll: "Eine einfache Wahrheit! Die Erde ist innen hohl, voller Zivilisationen und Energiequellen. Das verschweigen 'die Mächte'! Sogar Neuschwabenland zeigt das."
@@ -65,12 +67,12 @@ public class MatrixWorkerService : BackgroundService
             return;
         }
 
-        var client = await MatrixTextClient.ConnectAsync(Config.MatrixUserId, Config.MatrixPassword, "MatrixBot-342",
+        _client = await MatrixTextClient.ConnectAsync(Config.MatrixUserId, Config.MatrixPassword, "MatrixBot-342",
         HttpClientFactory, stoppingToken,
         Logger);
 
         //client.DebugMode = true;
-        await client.SyncAsync(MessageReceivedAsync);
+        await _client.SyncAsync(MessageReceivedAsync);
         Logger.LogInformation("Matrix Sync has ended.");
         _client = null;
     }
@@ -104,7 +106,7 @@ public class MatrixWorkerService : BackgroundService
                 cachedChannel.Users = cachedChannel.Users.Add(cachedUser);
             }
 
-            string? sanitizedMessage = SanitizeMessage(message, cachedChannel);
+            string? sanitizedMessage = SanitizeMessage(message, cachedChannel, out var isCurrentUserMentioned);
             if (sanitizedMessage == null)
                 return;
             if (sanitizedMessage.Length > 300)
@@ -118,7 +120,7 @@ public class MatrixWorkerService : BackgroundService
             if (isFromSelf)
                 return;
 
-            if (!ShouldRespond(message, sanitizedMessage))
+            if (!ShouldRespond(message, sanitizedMessage, isCurrentUserMentioned))
                 return;
 
             await RespondToMessage(message, cachedChannel, sanitizedMessage).ConfigureAwait(false);
@@ -139,12 +141,14 @@ public class MatrixWorkerService : BackgroundService
         var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
         if (string.IsNullOrEmpty(response))
         {
-            Logger.LogWarning($"OpenAI did not return a response to: {sanitizedMessage[..50]}");
+            Logger.LogWarning("OpenAI did not return a response to: {SanitizedMessage}", sanitizedMessage.Length > 50 ? sanitizedMessage[..50] : sanitizedMessage);
             return; // may be rate limited 
         }
 
-        response = HandleMentions(response, channel); // TODO: Wire up mentions in response
-        await message.SendResponseAsync(response).ConfigureAwait(false); // TODO, log here?
+        IList<MatrixId> mentions = [];
+        response = HandleMentions(response, channel, mentions);
+                                                // Set reply to true if we have no mentions
+        await message.SendResponseAsync(response, isReply: mentions == null, mentions: mentions).ConfigureAwait(false); // TODO, log here?
     }
 
     private static ChannelUser<string> GenerateChannelUser(RoomUser user)
@@ -154,8 +158,9 @@ public class MatrixWorkerService : BackgroundService
         return new ChannelUser<string>(user.User.UserId.Full, displayName, openAIName);
     }
 
-    private string? SanitizeMessage(ReceivedTextMessage message, JoinedTextChannel<string> cachedChannel)
+    private string? SanitizeMessage(ReceivedTextMessage message, JoinedTextChannel<string> cachedChannel, out bool isCurrentUserMentioned)
     {
+        isCurrentUserMentioned = false;
         if (message == null || message.Body == null)
             return null;
 
@@ -167,31 +172,41 @@ public class MatrixWorkerService : BackgroundService
         if (invalidStrings.Any(text.Contains))
             return null;
 
+        var customMentionPattern = @"<@(?<userId>[^:]+:[^>]+)>";
+        bool wasMentioned = false;
+        text = Regex.Replace(text, customMentionPattern, match =>
+        {
+            var userId = match.Groups["userId"].Value;
+            var user = cachedChannel.GetUser(userId);
+            if(user?.Id == _client!.CurrentUser.Full)
+            {
+                wasMentioned = true;
+            }
+            return user != null ? $"[[{user.CanonicalName}]]" : match.Value;
+        });
+
+        if(wasMentioned)
+            isCurrentUserMentioned = true;
+
         // Remove markdown style quotes
         text = Regex.Replace(text, @"^>.*$", string.Empty, RegexOptions.Multiline);
-
-        // Replace mentions by [[canonicalName]]
-        if (message.Mentions != null)
-        {
-            foreach (var mention in message.Mentions)
-            {
-                var user = cachedChannel.GetUser(mention.User.UserId.Full);
-                if (user == null)
-                    continue;
-
-                var mentionPattern = $@"(?<!\[){Regex.Escape(mention.GetDisplayName())}(?!\])";
-                text = Regex.Replace(text, mentionPattern, $"[[{user.CanonicalName}]]", RegexOptions.IgnoreCase);
-            }
-        }
-
         return text;
     }
 
-    private bool ShouldRespond(ReceivedTextMessage message, string sanitizedMessage)
+    /*
+    Quoted response:
+> <@krael:matrix.dnix.de> ich schau ja noch fast täglich diesen War and Tactic Youtube Lagebericht. Aber der Typ rührt jeden Tag mehr die Werbetrommel. \"Treffen Sie die wichtigste Entscheidung für sich selbst und werden sie mit einem kostenlosen Abo Teil der zweiten War and Tactic Division. Treten Sie in die Reihen von fast 60k Abonnenten und beweisen sie sich selbst das Zeug zu haben um Teil dieser großartigen Community zu werden\".\n> Also das ist mir eigentlich schon unerträglich lästiges Gesabbel. \n\nWas tun Herr general",
+
+
+    */
+    private bool ShouldRespond(ReceivedTextMessage message, string sanitizedMessage, bool isCurrentUserMentionedInBody)
     {
         if (message.Sender.User.UserId.Full.Equals("@armleuchter:matrix.dnix.de", StringComparison.OrdinalIgnoreCase) ||
             message.Sender.User.UserId.Full.Equals("@flokati:matrix.dnix.de", StringComparison.OrdinalIgnoreCase))
             return false; // Do not respond to the bots
+
+        if(isCurrentUserMentionedInBody)
+            return true;
 
         if (Regex.IsMatch(sanitizedMessage, @"\bStoll\b", RegexOptions.IgnoreCase))
             return true;
@@ -208,15 +223,23 @@ public class MatrixWorkerService : BackgroundService
         return false;
     }
 
-    private string HandleMentions(string response, JoinedTextChannel<string> cachedChannel)
+    private string HandleMentions(string response, JoinedTextChannel<string> cachedChannel, IList<MatrixId> mentions)
     {
-        // replace [[canonicalName]] with DisplayName using a regex lookup
+        // replace [[canonicalName]] with the <@fullId> syntax using a regex lookup
         var mentionPattern = @"\[\[(.*?)\]\]";
         return Regex.Replace(response, mentionPattern, match =>
         {
             var canonicalName = match.Groups[1].Value;
             var user = cachedChannel.Users.FirstOrDefault(u => string.Equals(u.CanonicalName, canonicalName, StringComparison.OrdinalIgnoreCase));
-            return user != null ? user.Name : canonicalName;
+            if(user != null)
+            {
+                if(UserId.TryParse(user.Id, out var userId) && userId != null)
+                {
+                    mentions.Add(userId);
+                    return user.Name;
+                }
+            }
+            return canonicalName;
         });
     }
 }

@@ -32,29 +32,28 @@ public class OpenAIService
         };
 
         var instructions = new List<ChatMessage>() { ChatMessage.CreateSystemMessage(systemPrompt) };
-        Dictionary<string, string> replacedParticipantNames = new();
         foreach (var input in inputs)
         {
-            var participantName = input.participantName;
+            var participantName = input.ParticipantName;
             if(participantName == null || participantName.Length >= 100)
                 throw new ArgumentException("Participant name is too long.", nameof(participantName));
 
             if (!IsValidName(participantName))
                 throw new ArgumentException("Participant name is invalid.", nameof(participantName));
 
-            if (input.isSelf)
+            if (input.IsSelf)
             {
-                var message = ChatMessage.CreateAssistantMessage(input.message);
-                if (input.participantName != null)
+                var message = ChatMessage.CreateAssistantMessage(input.Message);
+                if (input.ParticipantName != null)
                     message.ParticipantName = participantName;
                 instructions.Add(message);
             }
             else
             {
-                var message = ChatMessage.CreateUserMessage(input.message);
-                if (input.participantName != null)
+                var message = ChatMessage.CreateUserMessage(input.Message);
+                if (input.ParticipantName != null)
                     message.ParticipantName = participantName;
-                instructions.Add(message);
+                instructions.Add($"({input.ParticipantName}) {message}");
             }
         }
 
@@ -103,4 +102,4 @@ public class OpenAIService
     }
 }
 
-public record AIMessage(bool isSelf, string message, string participantName);
+public record AIMessage(bool IsSelf, string Message, string ParticipantName);

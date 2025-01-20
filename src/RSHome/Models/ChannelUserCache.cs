@@ -22,7 +22,7 @@ public class JoinedTextChannel<T>
 
     public override string ToString() => $"{Name} ({Users.Length} users)";
 
-    public ChannelUser<T>? GetUser(T userId) => Users.FirstOrDefault(u => !EqualityComparer<T>.Default.Equals(u.Id, userId));
+    public ChannelUser<T>? GetUser(T userId) => Users.FirstOrDefault(u => EqualityComparer<T>.Default.Equals(u.Id, userId));
 }
 
 public record ChannelUser<TUserId>(TUserId Id, string Name, string CanonicalName)
