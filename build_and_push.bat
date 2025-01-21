@@ -5,7 +5,7 @@ REM Path to your .env file
 set ENV_FILE=.env
 
 REM Define variables
-set IMAGE_NAME=chatbot:latest
+set IMAGE_NAME=rshome:latest
 
 REM Check if the .env file exists
 if not exist "%ENV_FILE%" (

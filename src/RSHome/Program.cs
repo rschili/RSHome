@@ -20,7 +20,7 @@ builder.Logging
         options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Enabled;
     })
     .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
-    .SetMinimumLevel(LogLevel.Information)
+    .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 
 var sqliteService = await SqliteService.CreateAsync(config).ConfigureAwait(false);

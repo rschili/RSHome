@@ -41,7 +41,7 @@ public class MatrixWorkerService : BackgroundService
     - Herr Stoll: "Eine einfache Wahrheit! Die Erde ist innen hohl, voller Zivilisationen und Energiequellen. Das verschweigen 'die Mächte'! Sogar Neuschwabenland zeigt das."
     """;
 
-    public MatrixWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory, SqliteService sqliteService, OpenAIService openAIService)
+    public MatrixWorkerService(ILogger<MatrixWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory, SqliteService sqliteService, OpenAIService openAIService)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));
@@ -131,7 +131,7 @@ public class MatrixWorkerService : BackgroundService
     {
         await message.Room.SendTypingNotificationAsync(2000).ConfigureAwait(false);
 
-        var history = await SqliteService.GetLastMatrixMessagesForRoomAsync(channel.Id, 10).ConfigureAwait(false);
+        var history = await SqliteService.GetLastMatrixMessagesForRoomAsync(channel.Id, 1).ConfigureAwait(false);
         //TODO: Matrix does not return own messages, so we need to add them manually
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
         var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
