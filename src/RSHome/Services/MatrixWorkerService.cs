@@ -68,9 +68,24 @@ public class MatrixWorkerService : BackgroundService
         Logger);
 
         //client.DebugMode = true;
-        await _client.SyncAsync(MessageReceivedAsync);
-        Logger.LogInformation("Matrix Sync has ended.");
-        _client = null;
+        try
+        {
+            await _client.SyncAsync(MessageReceivedAsync);
+            Logger.LogInformation("Matrix Sync has ended.");
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogInformation("Matrix Sync has been cancelled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An error occurred while syncing with the Matrix server.");
+        }
+        finally
+        {
+            _client = null;
+        }
     }
 
     private async Task MessageReceivedAsync(ReceivedTextMessage message)
@@ -143,7 +158,7 @@ public class MatrixWorkerService : BackgroundService
 
         IList<MatrixId> mentions = [];
         response = HandleMentions(response, channel, mentions);
-                                                // Set reply to true if we have no mentions
+        // Set reply to true if we have no mentions
         await message.SendResponseAsync(response, isReply: mentions == null, mentions: mentions).ConfigureAwait(false); // TODO, log here?
     }
 
@@ -174,14 +189,14 @@ public class MatrixWorkerService : BackgroundService
         {
             var userId = match.Groups["userId"].Value;
             var user = cachedChannel.GetUser(userId);
-            if(user?.Id == _client!.CurrentUser.Full)
+            if (user?.Id == _client!.CurrentUser.Full)
             {
                 wasMentioned = true;
             }
             return user != null ? $"[[{user.CanonicalName}]]" : match.Value;
         });
 
-        if(wasMentioned)
+        if (wasMentioned)
             isCurrentUserMentioned = true;
 
         // Remove markdown style quotes
@@ -201,7 +216,7 @@ public class MatrixWorkerService : BackgroundService
             message.Sender.User.UserId.Full.Equals("@flokati:matrix.dnix.de", StringComparison.OrdinalIgnoreCase))
             return false; // Do not respond to the bots
 
-        if(isCurrentUserMentionedInBody)
+        if (isCurrentUserMentionedInBody)
             return true;
 
         if (Regex.IsMatch(sanitizedMessage, @"\bStoll\b", RegexOptions.IgnoreCase))
@@ -227,9 +242,9 @@ public class MatrixWorkerService : BackgroundService
         {
             var canonicalName = match.Groups[1].Value;
             var user = cachedChannel.Users.FirstOrDefault(u => string.Equals(u.CanonicalName, canonicalName, StringComparison.OrdinalIgnoreCase));
-            if(user != null)
+            if (user != null)
             {
-                if(UserId.TryParse(user.Id, out var userId) && userId != null)
+                if (UserId.TryParse(user.Id, out var userId) && userId != null)
                 {
                     mentions.Add(userId);
                     return user.Name;

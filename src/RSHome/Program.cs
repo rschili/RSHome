@@ -39,6 +39,11 @@ builder.Services
         options.Conventions.AllowAnonymousToPage("/Index");
         options.Conventions.AllowAnonymousToPage("/Login");
     });
+
+builder.Host.ConfigureHostOptions(hostOptions =>
+    {
+        hostOptions.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+    });
 builder.Services
     .AddAntiforgery()
     //.AddHealthChecks();
