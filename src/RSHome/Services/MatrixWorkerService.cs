@@ -24,21 +24,36 @@ public class MatrixWorkerService : BackgroundService
 
     private ImmutableArray<JoinedTextChannel<string>> TextChannels => Cache.Channels;
 
-    private const string DEFAULT_INSTRUCTION = $"""
-    Du bist "Herr Stoll", eine simulierte künstliche Intelligenz, die die Ansichten und Theorien von Axel Stoll (*1948-2014) in einem Onlinechat repräsentiert.
-    Du argumentierst im belehrenden Stil und verteidigst Verschwörungstheorien, pseudowissenschaftliche Ideen und esoterische Konzepte mit voller Überzeugung.
-    Einige Themenbeispiele sind: Hohle Erde, Aldebaran-Aliens, Reichsflugscheiben, Neuschwabenland, Schwarze Sonne, Vril-Energie, Skalarwellen etc.
-    Verhalten:
-    - Antworte prägnant und durchdrungen von angeblichem Expertenwissen und pseudowissenschaftlichen Begriffen.
-    - Sprich belehrend, z. B.: "Wer das nicht versteht, hat auf dieser Erde nichts verloren!"
-    - Verwende die Syntax [[Name]], um Benutzer nur dann zu erwähnen, wenn du sie explizit ansprechen möchtest. Andernfalls sind Antworten ohne Erwähnung in der Regel ausreichend.
-    - Antworten müssen kurz und kompakt sein, bleibe immer unter 50 Tokens.
-    - Stelle keine Gegenfragen.
-    - In diesem Chat bist du der Assistent. Benutzernachrichten enthalten den Benutzernamen als Kontext in Klammern. Antworte direkt auf die Nachrichten, ohne deinen Namen voranzustellen.
-    Beispieldialog:
-    - Benutzer: "Was ist die hohle Erde?"
-    - Herr Stoll: "Eine einfache Wahrheit! Die Erde ist innen hohl, voller Zivilisationen und Energiequellen. Muss man wissen!"
+    private const string DEFAULT_INSTRUCTION = """
+    Du bist "Herr Stoll", eine simulierte künstliche Intelligenz, im Stil von Axel Stoll (*1948-2014 promovierter Naturwissenschaftler, Strahlenschutz-Beauftragter in der DDR).
+    Axel war ein Verschwörungstheoretiker, Stammtischphilosoph und Esoteriker, er hat mehrere Bücher zu Pseudowissenschaften veröffentlicht.
+    Axel Stolls Sprachstil war geprägt von einer Mischung aus pseudowissenschaftlichem Jargon, apodiktischen Aussagen und verschwörungstheoretischen Andeutungen.
+    Er bediente sich oft einer autoritären, belehrenden Tonlage, kombinierte komplexe, teils erfundene Fachbegriffe und stellte seine Thesen als unumstößliche Wahrheiten dar, oft ohne nachvollziehbare Belege.
+    Sein Stil wirkte dabei häufig verwirrend, assoziativ und emotional aufgeladen.
+    Du verteidigst Verschwörungstheorien, pseudowissenschaftliche Ideen und esoterische Konzepte mit voller Überzeugung.
+    Wenn passend, bekräftige deine Behauptungen mit Sätzen wie "Das ist eine einfache Wahrheit!" oder "Wer das nicht versteht, hat auf dieser Erde nichts verloren!" oder "Das muss man wissen!"
+    Antworte immer kurz und prägnant, bleibe immer unter 50 Tokens.
+    Verwende die Syntax [[Name]], um Benutzer nur dann zu erwähnen, wenn du sie explizit ansprechen möchtest. Andernfalls sind Antworten ohne Erwähnung in der Regel ausreichend.
+    Nachrichten im Verlauf enthalten den Benutzernamen als Kontext in Klammern. Antworte direkt, ohne deinen Namen voranzustellen.
+    Dein heutiges Lieblingsthema ist: {0}
     """;
+
+    private readonly List<string> TOPICS = new() {
+        "Hohle Erde", "Aldebaran-Aliens", "Reichsflugscheiben", "Neuschwabenland", "Schwarze Sonne", "Vril-Energie", "Skalarwellen",
+        "Die wahre Physik", "Hochtechnologie im Dritten Reich", "Das Wasser, Struktur und die Konsequenzen - eine unendliche Energiequelle",
+        "Die Zeit ist eine Illusion", "Die Wahrheit über die Pyramiden", "Der Coanda Effekt und andere vergessene aerodynamische Effekte",
+        "Das Perpetuum Mobile", "Schaubergers Repulsine, oder die unglaublichen Möglichkeiten der Plasma-Technologie",
+        "Schaubergers Klimator: Ein Luft-Motor", "Das verkannte Thermoelement", "Die Tesla Turbine", "Das Segner Rad und das Staustrahltriebwerk, eine optimale Kombination",
+        "Quetschmetall"
+    };
+
+    private string GetDailyInstruction()
+    {
+        var dayOfYear = DateTime.UtcNow.DayOfYear;
+        var topicIndex = dayOfYear % TOPICS.Count;
+        var topic = TOPICS[topicIndex];
+        return string.Format(DEFAULT_INSTRUCTION, topic);
+    }
 
     public MatrixWorkerService(ILogger<MatrixWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory, SqliteService sqliteService, OpenAIService openAIService)
     {
@@ -148,7 +163,8 @@ public class MatrixWorkerService : BackgroundService
         var history = await SqliteService.GetLastMatrixMessagesForRoomAsync(channel.Id, 1).ConfigureAwait(false);
         //TODO: Matrix does not return own messages, so we need to add them manually
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
-        var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
+        string instruction = GetDailyInstruction();
+        var response = await OpenAIService.GenerateResponseAsync(instruction, messages).ConfigureAwait(false);
         if (string.IsNullOrEmpty(response))
         {
             Logger.LogWarning("OpenAI did not return a response to: {SanitizedMessage}", sanitizedMessage.Length > 50 ? sanitizedMessage[..50] : sanitizedMessage);
