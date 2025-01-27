@@ -96,6 +96,25 @@ public class SqliteService : IDisposable
         return results.ToList();
     }
 
+    public async Task<List<MatrixMessage>> GetOwnMessagesForTodayPlusLastForRoomAsync(string room)
+    {
+        var (startOfDay, endOfDay) = DateTimeHandler.Default.GetCurrentDayRange();
+
+        var results = await Connection.QueryAsync<MatrixMessage>(@"
+        SELECT * FROM (
+            SELECT * FROM MatrixMessages 
+            WHERE Room = @Room AND IsFromSelf = FALSE 
+            ORDER BY Timestamp DESC 
+            LIMIT 1
+        )
+        UNION ALL
+        SELECT * FROM MatrixMessages 
+        WHERE Room = @Room AND IsFromSelf = TRUE AND Timestamp BETWEEN @StartOfDay AND @EndOfDay
+        ORDER BY Timestamp ASC
+    ", new { Room = room, StartOfDay = startOfDay, EndOfDay = endOfDay });
+        return results.ToList();
+    }
+
     public Task SetSettingAsync(string key, string value)
     {
         if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required", nameof(key));
@@ -166,7 +185,7 @@ public class DateTimeHandler : SqlMapper.TypeHandler<DateTimeOffset>
         if (value == null || value == DBNull.Value)
             return DateTimeOffset.MinValue;
 
-        if(value is long l)
+        if (value is long l)
         {
             return new DateTimeOffset(l, TimeSpan.Zero);
         }
@@ -177,5 +196,14 @@ public class DateTimeHandler : SqlMapper.TypeHandler<DateTimeOffset>
     public override void SetValue(IDbDataParameter parameter, DateTimeOffset value)
     {
         parameter.Value = value.UtcTicks;
+    }
+
+    public (long startOfDay, long endOfDay) GetCurrentDayRange()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var startOfDay = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
+        var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+        return (startOfDay.UtcTicks, endOfDay.UtcTicks);
     }
 }

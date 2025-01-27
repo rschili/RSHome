@@ -103,4 +103,58 @@ public class ArchiveServiceTests
         value = await sqliteService.GetSettingOrDefaultAsync("TestKey");
         await Assert.That(value).IsNull();
     }
+
+    [Test]
+    public async Task GetOwnMessagesForTodayPlusLastForRoomAsync_ReturnsCorrectMessages()
+    {
+        var mockConfigService = new Mock<IConfigService>();
+        mockConfigService.Setup(config => config.SqliteDbPath).Returns(":memory:");
+
+        using var sqliteService = await SqliteService.CreateAsync(mockConfigService.Object);
+
+        var now = DateTimeOffset.UtcNow;
+        var startOfDay = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
+        var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+        // Add messages to the database
+        await sqliteService.AddMatrixMessageAsync("1", startOfDay.AddHours(1), "user1", "User One", "Own Message 1", true, "room1"); // yes
+        await sqliteService.AddMatrixMessageAsync("2", startOfDay.AddHours(2), "user2", "User Two", "User Message 1", false, "room1");
+        await sqliteService.AddMatrixMessageAsync("3", startOfDay.AddHours(3), "user1", "User One", "Own Message 2", true, "room1"); // yes
+        await sqliteService.AddMatrixMessageAsync("4", startOfDay.AddHours(3), "user2", "User Two", "User Message 2", false, "room1");
+        await sqliteService.AddMatrixMessageAsync("5", startOfDay.AddHours(23), "user2", "User Two", "User Message 3", false, "room1"); // yes
+        await sqliteService.AddMatrixMessageAsync("6", startOfDay.AddDays(1).AddHours(1), "user1", "User One", "Own Message 3", true, "room1");
+        await sqliteService.AddMatrixMessageAsync("7", startOfDay.AddDays(-1).AddHours(10), "user1", "User One", "Own Message 4", true, "room1");
+
+        // Call the method
+        var messages = await sqliteService.GetOwnMessagesForTodayPlusLastForRoomAsync("room1");
+
+        // Assert the results
+        await Assert.That(messages.Count).IsEqualTo(3);
+        var x = messages[0];
+        await Assert.That(x.Id).IsEqualTo("1");
+        await Assert.That(x.Timestamp).IsEqualTo(startOfDay.AddHours(1));
+        await Assert.That(x.UserId).IsEqualTo("user1");
+        await Assert.That(x.UserLabel).IsEqualTo("User One");
+        await Assert.That(x.Body).IsEqualTo("Own Message 1");
+        await Assert.That(x.IsFromSelf).IsTrue();
+        await Assert.That(x.Room).IsEqualTo("room1");
+
+        var second = messages[1];
+        await Assert.That(second.Id).IsEqualTo("3");
+        await Assert.That(second.Timestamp).IsEqualTo(startOfDay.AddHours(3));
+        await Assert.That(second.UserId).IsEqualTo("user1");
+        await Assert.That(second.UserLabel).IsEqualTo("User One");
+        await Assert.That(second.Body).IsEqualTo("Own Message 2");
+        await Assert.That(second.IsFromSelf).IsTrue();
+        await Assert.That(second.Room).IsEqualTo("room1");
+
+        var third = messages[2];
+        await Assert.That(third.Id).IsEqualTo("5");
+        await Assert.That(third.Timestamp).IsEqualTo(startOfDay.AddHours(23));
+        await Assert.That(third.UserId).IsEqualTo("user2");
+        await Assert.That(third.UserLabel).IsEqualTo("User Two");
+        await Assert.That(third.Body).IsEqualTo("User Message 3");
+        await Assert.That(third.IsFromSelf).IsFalse();
+        await Assert.That(third.Room).IsEqualTo("room1");
+    }
 }

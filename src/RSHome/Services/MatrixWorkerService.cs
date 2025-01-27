@@ -160,8 +160,7 @@ public class MatrixWorkerService : BackgroundService
     {
         await message.Room.SendTypingNotificationAsync(2000).ConfigureAwait(false);
 
-        var history = await SqliteService.GetLastMatrixMessagesForRoomAsync(channel.Id, 1).ConfigureAwait(false);
-        //TODO: Matrix does not return own messages, so we need to add them manually
+        var history = await SqliteService.GetOwnMessagesForTodayPlusLastForRoomAsync(channel.Id).ConfigureAwait(false);
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
         string instruction = GetDailyInstruction();
         var response = await OpenAIService.GenerateResponseAsync(instruction, messages).ConfigureAwait(false);
