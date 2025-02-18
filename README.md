@@ -1,6 +1,7 @@
-# Narrensicher.Matrix
+# RSHome
 
-For now this is just a little hobby project to support the matrix.org chat protocol in .NET.
-I tried several libraries and got none of them to work as they were all still in beta or abandoned.
+Just a little hobby project of mine.
+It runs a Discord and Matrix chat bot in one process using the .NET service builder.
+Also exposes a web frontend with some configuration.
 
-The german word "Narrensicher" means "fool proof" which is what I'm trying to go for.
+The code may be useful to others as examples, but I doubt anyone will want to run this themselves if they are not me :-)
