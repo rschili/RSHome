@@ -27,7 +27,7 @@ public class OpenAIService
 
         var options = new ChatCompletionOptions
         {
-            MaxOutputTokenCount = 100,
+            MaxOutputTokenCount = 200,
             ResponseFormat = ChatResponseFormat.CreateTextFormat(),
         };
 
