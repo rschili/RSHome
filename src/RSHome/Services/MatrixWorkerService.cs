@@ -218,12 +218,6 @@ public class MatrixWorkerService : BackgroundService
         return text;
     }
 
-    /*
-    Quoted response:
-> <@krael:matrix.dnix.de> ich schau ja noch fast täglich diesen War and Tactic Youtube Lagebericht. Aber der Typ rührt jeden Tag mehr die Werbetrommel. \"Treffen Sie die wichtigste Entscheidung für sich selbst und werden sie mit einem kostenlosen Abo Teil der zweiten War and Tactic Division. Treten Sie in die Reihen von fast 60k Abonnenten und beweisen sie sich selbst das Zeug zu haben um Teil dieser großartigen Community zu werden\".\n> Also das ist mir eigentlich schon unerträglich lästiges Gesabbel. \n\nWas tun Herr general",
-
-
-    */
     private bool ShouldRespond(ReceivedTextMessage message, string sanitizedMessage, bool isCurrentUserMentionedInBody)
     {
         if (message.Sender.User.UserId.Full.Equals("@armleuchter:matrix.dnix.de", StringComparison.OrdinalIgnoreCase) ||
