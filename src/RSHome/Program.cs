@@ -97,23 +97,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 app.MapRazorPages();
 
-
-app.MapGet("/ticket", async context =>
-{
-    var ticket = await context.AuthenticateAsync();
-    if (!ticket.Succeeded)
-    {
-        await context.Response.WriteAsync($"Signed Out");
-        return;
-    }
-
-    foreach (var (key, value) in ticket.Properties.Items)
-    {
-        await context.Response.WriteAsync($"{key}: {value}\r\n");
-    }
-});
-
-app.MapGet("/list-routes", (IEnumerable<EndpointDataSource> endpointSources, EndpointDataSource etc) =>
+/*app.MapGet("/list-routes", (IEnumerable<EndpointDataSource> endpointSources, EndpointDataSource etc) =>
 {
     var sb = new StringBuilder();
     foreach (var source in endpointSources)
@@ -129,6 +113,6 @@ app.MapGet("/list-routes", (IEnumerable<EndpointDataSource> endpointSources, End
     }
 
     return sb.ToString();
-}).RequireAuthorization("admin");
+}).RequireAuthorization("admin");*/
 
 app.Run();
