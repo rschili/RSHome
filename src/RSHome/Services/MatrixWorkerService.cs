@@ -82,7 +82,10 @@ public class MatrixWorkerService : BackgroundService
         //client.DebugMode = true;
         try
         {
-            await _client.SyncAsync(MessageReceivedAsync);
+            await foreach(var message in _client.Messages.ReadAllAsync(stoppingToken))
+            {
+                await MessageReceivedAsync(message).ConfigureAwait(false);
+            }
             Logger.LogInformation("Matrix Sync has ended.");
         }
         catch (OperationCanceledException)
