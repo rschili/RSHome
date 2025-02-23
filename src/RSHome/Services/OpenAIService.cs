@@ -17,7 +17,7 @@ public class OpenAIService
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        Client = new ChatClient(model: "gpt-4o", apiKey: config.OpenAiApiKey);
+        Client = new ChatClient(model: "o3-mini" /* "gpt-4o" */, apiKey: config.OpenAiApiKey);
     }
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
@@ -27,8 +27,9 @@ public class OpenAIService
 
         var options = new ChatCompletionOptions
         {
-            MaxOutputTokenCount = 200,
+            MaxOutputTokenCount = 500,
             ResponseFormat = ChatResponseFormat.CreateTextFormat(),
+            ReasoningEffortLevel = ChatReasoningEffortLevel.Medium,
         };
 
         var instructions = new List<ChatMessage>() { ChatMessage.CreateSystemMessage(systemPrompt) };
