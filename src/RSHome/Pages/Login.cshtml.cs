@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RSHome.Services;
 using System.Collections.Generic;
@@ -23,9 +24,14 @@ public class LoginModel : PageModel
     [FromServices]
     public IConfigService Config { get; set; } = null!;
 
+    [FromServices]
+    public SecurityService Security { get; set; } = null!;
+
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(Password) && BCrypt.Net.BCrypt.EnhancedVerify(Password!, Config.WebLoginHash))
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        bool rateLimitExceeded = false;
+        if (!string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(Password) && Security.Authenticate(Password, ipAddress, out rateLimitExceeded))
         {
             var claims = new List<Claim>
             {
@@ -41,7 +47,11 @@ public class LoginModel : PageModel
             return RedirectToPage("/Index");
         }
 
-        // Optionally add an error message here
+        if(rateLimitExceeded)
+            ModelState.AddModelError(string.Empty, "Rate limit exceeded. Stop.");
+        /*else
+            ModelState.AddModelError(string.Empty, "Invalid login attempt.");*/
+
         return Page();
     }
 }

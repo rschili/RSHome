@@ -10,6 +10,12 @@ Console.WriteLine("Loading variables...");
 var config = ConfigService.LoadFromEnvFile();
 
 var builder = WebApplication.CreateBuilder(args);
+foreach (var s in builder.Configuration.Sources)
+{ // fix a problem with linux running out of file system watchers. https://stackoverflow.com/questions/56360697/how-can-i-disable-the-defaul-aspnet-core-config-change-watcher
+    if (s is FileConfigurationSource)
+        ((FileConfigurationSource)s).ReloadOnChange = false;
+}
+
 builder.Logging
     .ClearProviders()
     .AddSimpleConsole(options =>
@@ -26,6 +32,7 @@ builder.Logging
 var sqliteService = await SqliteService.CreateAsync(config).ConfigureAwait(false);
 builder.Services
     .AddSingleton<IConfigService>(config)
+    .AddSingleton<SecurityService>()
     .AddHttpClient()
     .AddSingleton(sqliteService)
     .AddSingleton<OpenAIService>()

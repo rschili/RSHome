@@ -15,6 +15,10 @@
                 <button type="submit">Login</button>
             </fieldset>
         </form>
+        @if (ModelState.ErrorCount > 0)
+        {
+            <p style="color:crimson;">@ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage</p>
+        }
     }
     else
     {
