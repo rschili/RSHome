@@ -1,0 +1,133 @@
+@charset "UTF-8";
+
+:root {
+    --font-family-monospace: Hack, Consolas, monospace;
+    --font-family: Roboto, Ubuntu, Helvetica, sans-serif;
+    --font-size: 100%;
+
+    --font-color: #FCF8ED;
+    --link-color1: #EAC3C7;
+    --link-color2: #DFA4AA;
+
+    --background-color1: #0D1321;
+    --background-color2: #1D2D44;
+    --border-color: #3E5C76;
+}
+
+@media (min-width:768px) { :root { --font-size: 110%; } }
+@media (min-width:1280px) { :root { --font-size: 125%; } }
+
+:where(:root) {
+    font-size: var(--font-size);
+    font-family: var(--font-family);
+
+    background-color: var(--background-color1);
+    color: var(--font-color);
+}
+
+a { color: var(--link-color1); }
+a:hover { color: var(--link-color2); }
+
+body {
+    margin: 0;
+    background-color: var(--background-color1);
+}
+
+header nav {
+    overflow: hidden;
+    background-color: var(--background-color2);
+}
+
+nav a, nav span {
+    float: left;
+    text-align: center;
+    padding: 1rem;
+    text-decoration: none;
+    font-size: 20px;
+    height: 24px;
+    color: var(--font-color);
+}
+
+nav a.active {
+  background-color: var(--font-color);
+  color: var(--background-color1);
+}
+
+svg {
+    fill: currentColor;
+}
+
+main {
+    display: block;
+    padding: 1rem;
+    margin: 0 auto;
+    background-color: var(--background-color1)
+}
+
+main article, main section, main div {
+    border: 2px solid var(--border-color);
+    background-color: var(--background-color2);
+    padding: 0 1rem;
+    margin: 0 0 1rem 0;
+}
+
+blockquote {
+    border-left: 2px solid var(--border-color);
+    padding-left: 1rem;
+}
+
+@media (min-width:768px) { main { max-width: 700px }}
+@media (min-width:1280px) { main { max-width: 1000px }}
+@media (min-width:1536px) { main { max-width: 1300px }}
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0.5rem 0;
+}
+
+code, pre, textarea {
+    font-family: var(--font-family-monospace);
+    font-size: 0.8em;
+    background-color: var(--background-color1);
+    display: inline-block;
+    padding: 0;
+    margin: 0;
+}
+
+:not(p) > code {
+    max-width: 70%;
+    border: 1px solid var(--border-color);
+    margin: 0 auto;
+    
+}
+
+fieldset {
+    border: 2px solid var(--border-color);
+    padding: 1rem;
+    margin: 0 auto 1rem auto;
+    display: flex;
+    flex-direction: column;
+    max-width: 768px;
+    background-color: var(--background-color1);
+}
+
+input[type=text], input[type=password], select {
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border: 2px solid var(--border-color);
+    background-color: var(--background-color1);
+}
+
+button[type=submit] {
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border: 2px solid var(--border-color);
+    background-color: var(--background-color2);
+}
+
+footer {
+    text-align: center;
+    padding: 1rem;
+    border-top: 2px solid var(--border-color);
+}
+
+
