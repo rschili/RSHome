@@ -106,7 +106,7 @@ fieldset {
     margin: 0 auto 1rem auto;
     display: flex;
     flex-direction: column;
-    max-width: 768px;
+    max-width: 600px;
     background-color: var(--background-color1);
 }
 
