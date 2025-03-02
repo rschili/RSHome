@@ -27,9 +27,9 @@ public class OpenAIService
 
         var options = new ChatCompletionOptions
         {
-            MaxOutputTokenCount = 2000,
+            MaxOutputTokenCount = 1000,
             ResponseFormat = ChatResponseFormat.CreateTextFormat(),
-            ReasoningEffortLevel = ChatReasoningEffortLevel.Medium,
+            //ReasoningEffortLevel = ChatReasoningEffortLevel.Medium,
         };
 
         var instructions = new List<ChatMessage>() { ChatMessage.CreateDeveloperMessage(systemPrompt) };
