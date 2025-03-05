@@ -115,6 +115,7 @@ input[type=text], input[type=password], select {
     margin: 0.5rem 0;
     border: 2px solid var(--border-color);
     background-color: var(--background-color1);
+    font-size: 1rem;
 }
 
 button[type=submit] {
@@ -122,6 +123,7 @@ button[type=submit] {
     margin: 0.5rem 0;
     border: 2px solid var(--border-color);
     background-color: var(--background-color2);
+    font-size: 1rem;
 }
 
 footer {
@@ -130,4 +132,22 @@ footer {
     border-top: 2px solid var(--border-color);
 }
 
+.grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 5px;
+    width: 500px;
+    height: 500px;
+    margin: 0 auto;
+    border: none;
+}
 
+.cell {
+    background-color: #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    border-radius: 5px;
+}

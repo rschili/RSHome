@@ -33,6 +33,7 @@ var sqliteService = await SqliteService.CreateAsync(config).ConfigureAwait(false
 builder.Services
     .AddSingleton<IConfigService>(config)
     .AddSingleton<SecurityService>()
+    .AddSingleton<WordleService>()
     .AddHttpClient()
     .AddSingleton(sqliteService)
     .AddSingleton<OpenAIService>()
@@ -45,6 +46,7 @@ builder.Services
         options.Conventions.AuthorizeFolder("/", "admin");
         options.Conventions.AllowAnonymousToPage("/Index");
         options.Conventions.AllowAnonymousToPage("/Login");
+        options.Conventions.AllowAnonymousToPage("/Wordle");
     });
 
 builder.Host.ConfigureHostOptions(hostOptions =>
