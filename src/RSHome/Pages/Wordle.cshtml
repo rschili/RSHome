@@ -2,20 +2,14 @@
 @model WordleModel
 
 <article>
-<h1>Server-Side Wordle!</h1>
-<p>You know the rules...</p>
+<h1>Wordle</h1>
+<p>You know the rules.</p>
 
 <div class="grid">
-    <div class="cell" style="background-color: #917d27;">H</div>
-    <div class="cell" style="background-color: #417e3b;">O</div>
-    <div class="cell">N</div>
-    <div class="cell">E</div>
-    <div class="cell">Y</div>
-    <div class="cell">A</div>
-    <div class="cell">U</div>
-    <div class="cell">D</div>
-    <div class="cell">I</div>
-    <div class="cell">T</div>
+    @foreach (var result in Model.Results)
+    {
+        <div class="cell" style="@(result.Color != null ? $"background-color: {result.Color};" : "")">@result.Letter</div>
+    }
 </div>
 
 @if (ModelState.ErrorCount > 0)

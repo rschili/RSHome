@@ -20,6 +20,11 @@ public class WordleService
         Dictionary = [.. words];
     }
 
+    public static bool IsValidInput(string? input)
+    {
+        return !string.IsNullOrWhiteSpace(input) && input.Length == 5 && !input.Any(c => !char.IsLetter(c));
+    }
+
     internal List<string> CheckTipps(string[] inputs)
     {
         if (WordleWord == null || DateTime.Now.DayOfYear != WordleWordDay)
