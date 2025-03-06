@@ -47,10 +47,13 @@ public class WordleModel : PageModel
         var results = Service.CheckTipps(inputs);
         RenderResults(results, inputs);
 
-        var currentDate = DateTime.Now;
-        var boardStateCookie = $"{currentDate:yyyy-MM-dd}:{string.Join(":", inputs)}";
-        Response.Cookies.Append("BoardState", boardStateCookie, 
-            new CookieOptions { Expires = currentDate.AddDays(1), HttpOnly = true, IsEssential = true }); 
+        if(ModelState.ErrorCount == 0)
+        { // only set the history if there are no errors
+            var currentDate = DateTime.Now;
+            var boardStateCookie = $"{currentDate:yyyy-MM-dd}:{string.Join(":", inputs)}";
+            Response.Cookies.Append("BoardState", boardStateCookie, 
+                new CookieOptions { Expires = currentDate.AddDays(1), HttpOnly = true, IsEssential = true }); 
+        }
 
         return Page();
     }
@@ -60,7 +63,7 @@ public class WordleModel : PageModel
 
     private void RenderResults(List<string> results, string[] inputs)
     {
-        if(results.Count != inputs.Length)
+        if(results.Count > inputs.Length)
             return; // Should not happen, ever
 
         for(int index = 0; index < results.Count; index++)

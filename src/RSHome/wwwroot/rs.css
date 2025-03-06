@@ -31,6 +31,7 @@ a:hover { color: var(--link-color2); }
 body {
     margin: 0;
     background-color: var(--background-color1);
+    min-width: 600px;
 }
 
 header nav {
@@ -135,10 +136,10 @@ footer {
 .grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(5, 1fr);
+    grid-template-rows: repeat(6, 1fr);
     gap: 5px;
-    width: 500px;
-    height: 500px;
+    width: 320px;
+    height: 385px;
     margin: 0 auto;
     border: none;
 }
@@ -150,4 +151,8 @@ footer {
     justify-content: center;
     font-size: 40px;
     border-radius: 5px;
+    height: 100%;
+    width: 100%;
+    padding: 0;
+    margin: 0;
 }
