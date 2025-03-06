@@ -18,13 +18,18 @@ public class WordleModel : PageModel
 
     public IActionResult OnGet()
     {
+        RenderExistingResults();
+        return Page();
+    }
+
+    public void RenderExistingResults()
+    {
         string[]? tippHistory = GetTippHistory();
         if(tippHistory != null)
         {
             var results = Service.CheckTipps(tippHistory);
             RenderResults(results, tippHistory);
         }
-        return Page();
     }
 
     public IActionResult OnPost()
@@ -32,12 +37,13 @@ public class WordleModel : PageModel
         var input = Input?.Trim()?.ToUpper();
         if(input == null || !WordleService.IsValidInput(input))
         {
+            RenderExistingResults();
             ModelState.AddModelError(nameof(Input), "Please enter a 5 letter word using only alphanumeric chars.");
             return Page();
         }
 
         string[]? tippHistory = GetTippHistory();
-        string[] inputs = tippHistory != null ? [.. tippHistory, input] : new[] { input };
+        string[] inputs = tippHistory != null ? [.. tippHistory, input] : [input];
         var results = Service.CheckTipps(inputs);
         RenderResults(results, inputs);
 
@@ -100,7 +106,7 @@ public class WordleModel : PageModel
             return null;
             
         var parts = boardStateCookie.Split(':');
-        if (parts.Length != 2)
+        if (parts.Length < 2 || parts.Length > 6)
             return null;
 
         if (!DateTime.TryParseExact(parts[0], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
