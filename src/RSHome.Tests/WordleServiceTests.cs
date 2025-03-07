@@ -9,6 +9,7 @@ public class WordleServiceTests
     //[DisplayName("Test CheckTipps on $wordle")] seems to break test explorer for now
     [Arguments("BADGE", new[] { "HONEY", "AUDIT", "BADGE" }, new[] { "OOOMO", "MOXOO", "X" })]
     [Arguments("SCRUM", new[] { "HONEY", "AUDIT", "PLUMP", "SCRUM" }, new[] { "OOOOO", "OMOOO", "OOMMO", "X" })]
+    [Arguments("RELIC", new[] { "HONEY", "AUDIT", "PIXIE", "RELIC" }, new[] { "OOOMO", "OOOXO", "OOOXM", "X" })]
     public async Task TestCheckTipps(string wordle, string[] inputs, string[] expectedResults)
     {
         var service = new WordleService();

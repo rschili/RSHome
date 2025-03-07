@@ -8,7 +8,7 @@
 <div class="grid">
     @foreach (var result in Model.Results)
     {
-        <div class="cell" style="@(result.Color != null ? $"background-color: {result.Color};" : "")">@result.Letter</div>
+        <div class="cell" @Html.Raw(result.Color != null ? $"style='background-color: {result.Color};'" : "")>@result.Letter</div>
     }
 </div>
 
@@ -17,10 +17,29 @@
     <p style="color:crimson; margin:0 auto; text-align: center;">@ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage</p>
 }
 
+@if (Model.State == GameState.InProgress)
+{
 <form method="post">
     <fieldset>
     <input type="text" asp-for="Input" value="" placeholder="input" autofocus/>
     <button type="submit">Try!</button>
     </fieldset>
 </form>
+} else if (Model.State == GameState.Won || Model.State == GameState.Lost)
+{
+<fieldset>
+<button type="button" onclick="copyToClipboard()">Copy Summary</button>
+<textarea id="summary" asp-for="Summary" rows="7" cols="40" readonly></textarea>
+</fieldset>
+
+<script>
+function copyToClipboard() {
+    var summary = document.getElementById("summary");
+    summary.select();
+    summary.setSelectionRange(0, 999); // For mobile devices
+    document.execCommand("copy");
+    alert("Summary copied to clipboard");
+}
+</script>
+}
 </article>

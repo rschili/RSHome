@@ -5,6 +5,14 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using RSHome.Services;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using System.Text;
+
+public enum GameState
+{
+    InProgress,
+    Won,
+    Lost
+}
 
 public class WordleModel : PageModel
 {
@@ -15,6 +23,11 @@ public class WordleModel : PageModel
     public WordleService Service { get; set; } = null!;
 
     public List<WordleGridCell> Results { get; } = new();
+
+    public string Summary { get; private set; } = string.Empty;
+
+    public GameState State { get; private set; } = GameState.InProgress;
+
 
     public IActionResult OnGet()
     {
@@ -82,6 +95,8 @@ public class WordleModel : PageModel
                 {
                     Results.Add(new WordleGridCell(input[i], GreenColor));
                 }
+                State = GameState.Won;
+                Summary = RenderSummary(results);
                 return;
             }
 
@@ -100,6 +115,42 @@ public class WordleModel : PageModel
                 Results.Add(new WordleGridCell(letter, color));
             }
         }
+
+        if(results.Count >= 6)
+        {
+            State = GameState.Lost;
+            Summary = RenderSummary(results);
+        }
+    }
+
+    private string RenderSummary(List<string> results)
+    {
+        StringBuilder sb = new();
+        sb.AppendLine($"RS Wordle {DateTime.Now:yyyy-MM-dd} {results.Count}/6");
+
+        for(int index = 0; index < results.Count; index++)
+        {
+            var result = results[index];
+
+            if(result == WordleService.CorrectIndicator)
+            {
+                sb.AppendLine("✅✅✅✅✅");
+                return sb.ToString();
+            }
+
+            for(int i = 0; i < result.Length; i++)
+            {
+                sb.Append(result[i] switch
+                {
+                    WordleService.LetterCorrect => "✅",
+                    WordleService.LetterMisplaced => "🟨",
+                    _ => "⬛"
+                });
+            }
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
     }
 
     private string[]? GetTippHistory()
