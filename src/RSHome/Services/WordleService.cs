@@ -85,6 +85,15 @@ public class WordleService
         char letter = input[i];
         var previousHints = input[..i].Count(c => c == letter);
         var occurrences = WordleWord!.Count(c => c == letter);
+        if(i < 4)
+        {
+            for(int lookAhead = i + 1; lookAhead < 5; lookAhead++)
+            {
+                //Special case. If the letter is already used later in the input at the correct position, we hint it that times less
+                if(input[lookAhead] == letter && letter == WordleWord![lookAhead])
+                    previousHints++;
+            }
+        }
         return previousHints >= occurrences;
     }
 

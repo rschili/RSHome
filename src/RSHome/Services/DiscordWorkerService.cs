@@ -71,7 +71,6 @@ public class DiscordWorkerService : BackgroundService
         _client.Ready += ReadyAsync;
         await _client.LoginAsync(TokenType.Bot, Config.DiscordToken);
         await _client.StartAsync();
-        await Task.Delay(Timeout.Infinite, stoppingToken);
         try
         {
             await Task.Delay(Timeout.Infinite, stoppingToken);
@@ -99,7 +98,10 @@ public class DiscordWorkerService : BackgroundService
 
         Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
         await InitializeCache();
-        _client.MessageReceived += MessageReceived;
+
+        if(!IsRunning)
+            _client.MessageReceived += MessageReceived;
+
         IsRunning = true;
     }
 
