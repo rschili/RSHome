@@ -26,7 +26,7 @@ builder.Logging
         options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Enabled;
     })
     .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
-    .AddFilter("RSHome.Services.MatrixWorkerService", LogLevel.Information) // Filter logs from Matrix
+    .AddFilter("RSHome.Services.MatrixWorkerService", LogLevel.Warning) // Filter logs from Matrix
     .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 

@@ -1,5 +1,6 @@
-FROM mcr.microsoft.com/dotnet/sdk:9.0@sha256:3fcf6f1e809c0553f9feb222369f58749af314af6f063f389cbd2f913b4ad556 AS build-env
+FROM  mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build-env
 WORKDIR /RSHome
+RUN apk update && apk --no-cache add ca-certificates tzdata
 COPY /src .
 
 # Run tests
@@ -10,7 +11,8 @@ RUN dotnet test --verbosity normal
 WORKDIR /RSHome/RSHome
 RUN dotnet publish -c Release -o out
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0.0
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
 WORKDIR /RSHome
+RUN apk update && apk --no-cache add ca-certificates tzdata
 COPY --from=build-env RSHome/RSHome/out .
 ENTRYPOINT ["./RSHome"]

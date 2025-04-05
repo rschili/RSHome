@@ -85,11 +85,11 @@ public class MatrixWorkerService : BackgroundService
                     return;
                 }
 
-                Logger.LogInformation("Attempting to connect to Matrix...");
+                Logger.LogWarning("Attempting to connect to Matrix...");
                 _client = await MatrixTextClient.ConnectAsync(Config.MatrixUserId, Config.MatrixPassword, "MatrixBot-342",
                     HttpClientFactory, stoppingToken, Logger);
 
-                Logger.LogInformation("Connected to Matrix successfully.");
+                Logger.LogWarning("Connected to Matrix successfully.");
                 retryCount = 0; // Reset retry count upon successful connection
                 currentDelay = initialDelay;   // Reset delay upon successful connection
 
