@@ -68,37 +68,66 @@ public class MatrixWorkerService : BackgroundService
             Logger.LogInformation("Matrix is disabled.");
             return;
         }
-        if (IsRunning)
-        {
-            Logger.LogWarning("Matrix worker service is already running.");
-            return;
-        }
 
-        _client = await MatrixTextClient.ConnectAsync(Config.MatrixUserId, Config.MatrixPassword, "MatrixBot-342",
-        HttpClientFactory, stoppingToken,
-        Logger);
+        const int maxRetries = 5; // Maximum number of retries
+        int retryCount = 0;       // Current retry attempt
+        const int initialDelay = 5000;         // Initial delay in milliseconds
+        const int retryDelayFactor = 4; // Factor to increase delay
+        int currentDelay = initialDelay; // Current delay
 
-        //client.DebugMode = true;
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            await foreach(var message in _client.Messages.ReadAllAsync(stoppingToken))
+            try
             {
-                await MessageReceivedAsync(message).ConfigureAwait(false);
+                if (IsRunning)
+                {
+                    Logger.LogError("Matrix worker service is already running.");
+                    return;
+                }
+
+                Logger.LogInformation("Attempting to connect to Matrix...");
+                _client = await MatrixTextClient.ConnectAsync(Config.MatrixUserId, Config.MatrixPassword, "MatrixBot-342",
+                    HttpClientFactory, stoppingToken, Logger);
+
+                Logger.LogInformation("Connected to Matrix successfully.");
+                retryCount = 0; // Reset retry count upon successful connection
+                currentDelay = initialDelay;   // Reset delay upon successful connection
+
+                // Process messages
+                await foreach (var message in _client.Messages.ReadAllAsync(stoppingToken))
+                {
+                    await MessageReceivedAsync(message).ConfigureAwait(false);
+                }
+
+                Logger.LogWarning("Matrix Sync has ended.");
             }
-            Logger.LogInformation("Matrix Sync has ended.");
-        }
-        catch (OperationCanceledException)
-        {
-            Logger.LogInformation("Matrix Sync has been cancelled.");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "An error occurred while syncing with the Matrix server.");
-        }
-        finally
-        {
-            _client = null;
+            catch (OperationCanceledException)
+            {
+                Logger.LogWarning("Matrix Sync has been cancelled.");
+                throw; // Exit the loop and terminate the service
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "An error occurred while syncing with the Matrix server.");
+            }
+            finally
+            {
+                _client = null;
+            }
+
+            // Reconnection logic
+            retryCount++;
+            if (retryCount > maxRetries)
+            {
+                Logger.LogError("Maximum number of retries reached. Stopping Matrix worker service.");
+                break;
+            }
+
+            Logger.LogWarning("Reconnecting to Matrix in {Delay}s (Attempt {RetryCount}/{MaxRetries})...", currentDelay / 1000, retryCount, maxRetries);
+            await Task.Delay(currentDelay, stoppingToken);
+
+            // Increase delay for the next retry, up to the maximum delay
+            currentDelay = currentDelay * retryDelayFactor;
         }
     }
 
@@ -190,7 +219,7 @@ public class MatrixWorkerService : BackgroundService
             return null;
 
         string text = message.Body;
-        text = Regex.Unescape(text);
+        text = text.Replace("\\n", "\n"); // replace escaped newlines with real newlines
 
         // Check for wordle messages
         string[] invalidStrings = { "🟨", "🟩", "⬛", "🟦", "⬜", "➡️", "📍", "🗓️", "🥇", "🥈", "🥉" };
