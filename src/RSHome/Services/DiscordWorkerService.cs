@@ -129,7 +129,7 @@ public class DiscordWorkerService : BackgroundService
             LogSeverity.Debug => LogLevel.Debug,
             _ => LogLevel.None
         };
-        Logger.Log(logLevel, message.Exception, message.Message);
+        Logger.Log(logLevel, message.Exception, $"DiscordClientLog: ${message.Message}");
         return Task.CompletedTask;
     }
 
