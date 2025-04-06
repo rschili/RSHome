@@ -6,8 +6,20 @@ using RSHome.Services;
 using Microsoft.AspNetCore.Builder;
 using System.Text;
 
+Console.WriteLine($"Current user: {Environment.UserName}");
 Console.WriteLine("Loading variables...");
 var config = ConfigService.LoadFromEnvFile();
+
+string dbPath = config.SqliteDbPath;
+string dbDirectory = Path.GetDirectoryName(dbPath) ?? throw new InvalidOperationException("Database path is invalid or null.");
+if (!Directory.Exists(dbDirectory))
+{
+    Directory.CreateDirectory(dbDirectory);
+}
+using (StreamWriter sw = new(Path.Combine(dbDirectory, "log.txt"), append: true))
+{
+    sw.WriteLine($"Starting RSHome at {DateTime.UtcNow}");
+}
 
 var builder = WebApplication.CreateBuilder(args);
 foreach (var s in builder.Configuration.Sources)
