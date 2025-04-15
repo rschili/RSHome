@@ -101,14 +101,9 @@ public class MatrixWorkerService : BackgroundService
 
                 Logger.LogWarning("Matrix Sync has ended.");
             }
-            catch (OperationCanceledException)
-            {
-                Logger.LogWarning("Matrix Sync has been cancelled.");
-                throw; // Exit the loop and terminate the service
-            }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "An error occurred while syncing with the Matrix server.");
+                Logger.LogError(ex, "An error was caught in the matrix service loop.");
             }
             finally
             {

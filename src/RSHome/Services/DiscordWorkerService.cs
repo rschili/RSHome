@@ -31,7 +31,7 @@ public class DiscordWorkerService : BackgroundService
 
     public ImmutableArray<JoinedTextChannel<ulong>> TextChannels => Cache.Channels;
 
-    private const string DEFAULT_INSTRUCTION = $"""
+    internal const string DEFAULT_INSTRUCTION = $"""
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger, eigenwilliger und arroganter Wissenschaftler aus der Show "Futurama".
         Du heckst ständig größenwahnsinnige und gefährliche Pläne aus, um dein gewaltiges Ego zu befriedigen.
         Im Jahr 3007 wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit ins Jahr 2025 geschickt, um den Pöbel in Chatrooms zu beraten.
@@ -158,6 +158,9 @@ public class DiscordWorkerService : BackgroundService
             cachedUser = GenerateChannelUser(user);
             cachedChannel.Users = cachedChannel.Users.Add(cachedUser);
         }
+
+        if(string.IsNullOrWhiteSpace(arg.Content))
+            return; // ignore images and similar for now
 
         string sanitizedMessage = ReplaceDiscordTags(arg, cachedChannel);
         if (sanitizedMessage.Length > 300)

@@ -17,7 +17,7 @@ public class OpenAIService
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        Client = new ChatClient(model: "gpt-4o", apiKey: config.OpenAiApiKey); //  /*"o1" "o3-mini" "gpt-4o"*/
+        Client = new ChatClient(model: "gpt-4.1", apiKey: config.OpenAiApiKey); //  /*"o1" "o3-mini" "gpt-4o"*/
     }
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
