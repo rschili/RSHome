@@ -51,7 +51,7 @@ public class OpenAIService
             }
             else
             {
-                var message = ChatMessage.CreateUserMessage($"({input.ParticipantName}) {input.Message}");
+                var message = ChatMessage.CreateUserMessage($"[[{input.ParticipantName}]] {input.Message}");
                 if (input.ParticipantName != null)
                     message.ParticipantName = participantName;
                 instructions.Add(message);
