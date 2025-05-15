@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -31,6 +32,14 @@ public class DiscordWorkerService : BackgroundService
 
     public ImmutableArray<JoinedTextChannel<ulong>> TextChannels => Cache.Channels;
 
+    private List<string> RollCommandNames = new()
+    {
+        "rnd",
+        "roll",
+        "rand",
+        "random"
+    };
+
     internal const string DEFAULT_INSTRUCTION = $"""
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger, eigenwilliger und arroganter Wissenschaftler aus der Show "Futurama".
         Du heckst ständig größenwahnsinnige und gefährliche Pläne aus, um dein gewaltiges Ego zu befriedigen.
@@ -53,7 +62,7 @@ public class DiscordWorkerService : BackgroundService
     {
         if(!Config.DiscordEnable)
         {
-            Logger.LogInformation("Discord is disabled.");
+            Logger.LogWarning("Discord is disabled.");
             return;
         }
         var intents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent | GatewayIntents.GuildMembers;
@@ -65,6 +74,7 @@ public class DiscordWorkerService : BackgroundService
             MessageCacheSize = 100,
             GatewayIntents = intents
         };
+        Logger.LogWarning("Connecting to Discord...");
         _client = new DiscordSocketClient(discordConfig);
 
         _client.Log += LogAsync;
@@ -77,7 +87,7 @@ public class DiscordWorkerService : BackgroundService
         }
         catch (TaskCanceledException)
         {
-            Logger.LogInformation("Cancellation requested, shutting down...");
+            Logger.LogWarning("Cancellation requested, shutting down...");
         }
         catch (Exception ex)
         {
@@ -96,11 +106,33 @@ public class DiscordWorkerService : BackgroundService
         if (_client == null)
             return;
 
-        Logger.LogInformation($"Discord User {_client.CurrentUser} is connected!");
+        Logger.LogWarning($"Discord User {_client.CurrentUser} is connected successfully!");
         await InitializeCache();
 
-        if(!IsRunning)
+        if (!IsRunning)
+        {
             _client.MessageReceived += MessageReceived;
+            _client.SlashCommandExecuted += SlashCommandExecuted;
+        }
+
+        try
+        {
+            foreach (var commandName in RollCommandNames)
+            {
+                var commandBuilder = new SlashCommandBuilder()
+                    .WithContextTypes(InteractionContextType.Guild, InteractionContextType.PrivateChannel)
+                    .WithName(commandName)
+                    .WithDescription("Rolls a random number.")
+                    .AddOption("range", ApplicationCommandOptionType.String, "One or two numbers separated by a space or slash.", isRequired: false);
+                await _client.CreateGlobalApplicationCommandAsync(commandBuilder.Build()).ConfigureAwait(false);
+                
+                Logger.LogWarning("Created slash command: {CommandName}", commandName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An error occurred while creating slash commands.");
+        }
 
         IsRunning = true;
     }
@@ -117,6 +149,69 @@ public class DiscordWorkerService : BackgroundService
         }, TaskContinuationOptions.OnlyOnFaulted);
         return Task.CompletedTask;
     }
+
+    private async Task SlashCommandExecuted(SocketSlashCommand command)
+    {
+        try
+        {
+            string commandName = command.Data.Name;
+            if (RollCommandNames.Contains(commandName))
+            {
+                await RollCommandExecuted(command);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An error occurred while processing a slash command. Name: {Name}, Input was: {Input}", command.CommandName, command.Data.ToString());
+            await command.RespondAsync($"Sorry das hat nicht funktioniert.", ephemeral: true).ConfigureAwait(false);
+        }
+    }
+
+    private async Task RollCommandExecuted(SocketSlashCommand command)
+    {
+        int lowerBound = 1;
+        int upperBound = 100;
+        var rangeOption = command.Data.Options.FirstOrDefault(o => o.Name == "range");
+        if (rangeOption != null)
+        {
+            var rangeString = rangeOption.Value.ToString();
+            if (!string.IsNullOrWhiteSpace(rangeString))
+            {
+                (lowerBound, upperBound) = ParseRangeOption(rangeString);
+            }
+        }
+
+        int result = 0;
+        if (lowerBound == upperBound)
+            result = lowerBound;
+        else
+        {
+            var random = new Random();
+            result = random.Next(lowerBound, upperBound + 1);
+        }
+        await command.RespondAsync($"{MentionUtils.MentionUser(command.User.Id)} rolled a {result} ({lowerBound}-{upperBound})");
+    }
+
+    private (int LowerBound, int UpperBound) ParseRangeOption(string rangeOption)
+    {
+        if (string.IsNullOrWhiteSpace(rangeOption))
+            throw new ArgumentException("Range option cannot be null or empty.", nameof(rangeOption));
+
+        var parts = rangeOption.Split([' ', '-'], 2, StringSplitOptions.TrimEntries);
+        if (parts.Length == 1 && int.TryParse(parts[0], out int singleValue) && singleValue > 0)
+        {
+            return (1, singleValue);
+        }
+        else if (parts.Length == 2 && int.TryParse(parts[0], out int min) && int.TryParse(parts[1], out int max)
+            && min > 0 && max > 0 && min <= max)
+        {
+            return (min, max);
+        }
+
+        return (1, 100); // default range
+    }
+
 
     private Task LogAsync(LogMessage message)
     {
