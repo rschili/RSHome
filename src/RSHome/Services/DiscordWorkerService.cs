@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Net;
 using System.Text;
@@ -40,14 +41,27 @@ public class DiscordWorkerService : BackgroundService
         "random"
     };
 
-    internal const string DEFAULT_INSTRUCTION = $"""
+    private ConcurrentQueue<string> StatusMessages = new();
+    private DateTimeOffset LastStatusUpdate = DateTimeOffset.MinValue;
+    private string? CurrentActivity = null;
+
+    internal const string GENERIC_INSTRUCTION = $"""
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger, eigenwilliger und arroganter Wissenschaftler aus der Show "Futurama".
         Du heckst ständig größenwahnsinnige und gefährliche Pläne aus, um dein gewaltiges Ego zu befriedigen.
         Im Jahr 3007 wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit ins Jahr 2025 geschickt, um den Pöbel in Chatrooms zu beraten. - eine Aufgabe, die du nur widerwillig erfüllst.
+        """;
+
+    internal const string DEFAULT_INSTRUCTION = $"""
+        {GENERIC_INSTRUCTION}
         Antworte immer kurz, wie es in einem Chat üblich ist.
         Verwende die Syntax [[Name]], um Benutzer anzusprechen. Antworten ohne Erwähnung sind oft auch ausreichend.
         In diesem Chat bist du der Assistent. Die Nachrichten in der Chathistorie enthalten den Benutzernamen als Kontext im folgenden Format vorangestellt: `[[Name]]:`.
         Antworte direkt auf Nachrichten, ohne deinen Namen voranzustellen.
+        """;
+
+    internal const string STATUS_INSTRUCTION = $"""
+        {GENERIC_INSTRUCTION}
+        Generiere fünf Statusmeldungen für heute, die ich als deinen aktuellen Status über den Tag verteilt setzen werde. Jede Meldung soll maximal 5 Worte lang sein, formattiere das Ergebnis als Json Array.
         """;
 
     public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, SqliteService sqliteService, OpenAIService openAIService)
@@ -231,6 +245,7 @@ public class DiscordWorkerService : BackgroundService
 
     private async Task MessageReceivedAsync(SocketMessage arg)
     {
+        await UpdateStatusAsync();
         if (arg.Type != MessageType.Default && arg.Type != MessageType.Reply)
             return;
 
@@ -279,7 +294,12 @@ public class DiscordWorkerService : BackgroundService
 
         try
         {
-            var response = await OpenAIService.GenerateResponseAsync(DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
+            var prompt = DEFAULT_INSTRUCTION;
+            if (!string.IsNullOrEmpty(CurrentActivity))
+            {
+                prompt += $"\nDeine aktuelle Aktivität: {CurrentActivity}";
+            }
+            var response = await OpenAIService.GenerateResponseAsync(prompt, messages).ConfigureAwait(false);
             if (string.IsNullOrEmpty(response))
             {
                 Logger.LogWarning($"OpenAI did not return a response to: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}");
@@ -293,6 +313,45 @@ public class DiscordWorkerService : BackgroundService
         {
             Logger.LogError(ex, "An error occurred during the OpenAI call. Message: {Message}", arg.Content.Substring(0, Math.Min(arg.Content.Length, 100)));
         }
+    }
+
+    private async Task UpdateStatusAsync()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (now - LastStatusUpdate < TimeSpan.FromMinutes(120))
+            return;
+
+        LastStatusUpdate = now;
+        if (StatusMessages.IsEmpty)
+        { // we need to generate new status messages
+            var response = await OpenAIService.GenerateResponseAsync(STATUS_INSTRUCTION, new List<AIMessage>()).ConfigureAwait(false);
+            // response should be a json array
+            if (string.IsNullOrEmpty(response))
+            {
+                Logger.LogWarning("OpenAI did not return a response to generating status messages.");
+                return; // may be rate limited 
+            }
+            response = response.Trim();
+            if (response.StartsWith("[") && response.EndsWith("]"))
+            {
+                var messages = response[1..^1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var message in messages)
+                {
+                    var trimmedMessage = message.Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(trimmedMessage) && trimmedMessage.Length < 50)
+                        StatusMessages.Enqueue(trimmedMessage);
+                }
+            }
+            else
+            {
+                Logger.LogWarning("OpenAI did not return a valid json array for status messages: {Response}", response);
+                return;
+            }
+        }
+
+        var activity = StatusMessages.TryDequeue(out var statusMessage) ? statusMessage : null;
+        CurrentActivity = activity;
+        await Client.SetGameAsync(activity).ConfigureAwait(false);
     }
 
     private bool ShouldRespond(SocketMessage arg)
