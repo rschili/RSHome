@@ -351,7 +351,7 @@ public class DiscordWorkerService : BackgroundService
 
         var activity = StatusMessages.TryDequeue(out var statusMessage) ? statusMessage : null;
         CurrentActivity = activity;
-        await Client.SetGameAsync(activity).ConfigureAwait(false);
+        await Client.SetCustomStatusAsync(activity).ConfigureAwait(false);
     }
 
     private bool ShouldRespond(SocketMessage arg)
