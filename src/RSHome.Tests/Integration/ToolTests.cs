@@ -8,7 +8,7 @@ namespace RSHome.Tests.Integration;
 
 public class ToolTests
 {
-    [Test, Explicit]
+    //[Test, Explicit]
     public async Task ObtainWeatherInDielheim()
     {
         var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();

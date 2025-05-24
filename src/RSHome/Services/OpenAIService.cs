@@ -35,7 +35,7 @@ public class OpenAIService
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "City name or ZIP code to get the current weather for.",
+                        "description": "City name or ZIP code to get the current weather for."
                     }
                 },
                 "required": [ "location" ]
@@ -88,7 +88,7 @@ public class OpenAIService
         catch (Exception ex)
         {
             Logger.LogError(ex, "An error occurred during the OpenAI call.");
-            return null;
+            return $"Fehler bei der Kommunikation mit OpenAI: {ex.Message}";
         }
     }
 
@@ -122,6 +122,7 @@ public class OpenAIService
                     Logger.LogWarning("Maximum depth reached.");
                     return "(Maximale Anzahl an Toolaufrufen erreicht)";
                 }
+                instructions.Add(new AssistantChatMessage(response));
                 foreach (ChatToolCall toolCall in response.Value.ToolCalls)
                 {
                     switch (toolCall.FunctionName)
@@ -141,7 +142,7 @@ public class OpenAIService
                                         Logger.LogWarning("Weather tool call returned no response.");
                                         instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Wetterdaten gefunden."));
                                     }
-                                    instructions.Add(ChatMessage.CreateAssistantMessage(weatherResponse));
+                                    instructions.Add(new ToolChatMessage(toolCall.Id, weatherResponse));
                                 }
                                 catch (Exception ex)
                                 {
