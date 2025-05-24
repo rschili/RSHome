@@ -50,7 +50,7 @@ builder.Services
     .AddSingleton<WordleService>()
     .AddHttpClient()
     .AddSingleton(sqliteService)
-    .AddSingleton<IToolService>()
+    .AddSingleton<IToolService, ToolService>()
     .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())
