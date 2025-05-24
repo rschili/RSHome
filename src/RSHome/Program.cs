@@ -38,7 +38,8 @@ builder.Logging
         options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Enabled;
     })
     .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
-    .AddFilter("RSHome.Services.MatrixWorkerService", LogLevel.Warning) // Filter logs from Matrix
+    .AddFilter("RSHome.Services.MatrixWorkerService", LogLevel.Warning)
+    .AddFilter("RSHome.Services.OpenAIService", LogLevel.Information)
     .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 
@@ -49,6 +50,7 @@ builder.Services
     .AddSingleton<WordleService>()
     .AddHttpClient()
     .AddSingleton(sqliteService)
+    .AddSingleton<IToolService>()
     .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()
     .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())

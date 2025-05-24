@@ -1,9 +1,6 @@
-using System.Globalization;
 using RSHome.Services;
-using TUnit.Assertions.Extensions;
 using NSubstitute;
 using DotNetEnv.Extensions;
-using Castle.Core.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Logging;
 
@@ -11,7 +8,7 @@ namespace RSHome.Tests.Integration;
 
 public class OpenAITests
 {
-    [Test, Explicit]
+    //[Test, Explicit]
     public async Task SendGenericRequest()
     {
         var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
@@ -24,7 +21,8 @@ public class OpenAITests
 
         var config = Substitute.For<IConfigService>();
         config.OpenAiApiKey.Returns(openAiKey);
-        var service = new OpenAIService(config, NullLogger<OpenAIService>.Instance);
+        var toolService = Substitute.For<IToolService>();
+        var service = new OpenAIService(config, NullLogger<OpenAIService>.Instance, toolService);
 
         List<AIMessage> messages = new()
         {

@@ -22,6 +22,7 @@ public interface IConfigService
     string SqliteDbPath { get; }
     string CertificatePath { get; }
     string PfxPassword { get; }
+    string OpenWeatherMapApiKey { get; }
 }
 
 
@@ -41,6 +42,7 @@ public enum EnvVar
     SQLITE_DB_PATH,
     CERTIFICATE_PATH,
     PFX_PASSWORD,
+    OPENWEATHERMAP_API_KEY
 }
 
 public class ConfigService : IConfigService
@@ -61,6 +63,7 @@ public class ConfigService : IConfigService
     public string SqliteDbPath => _variables[EnvVar.SQLITE_DB_PATH];
     public string CertificatePath => _variables[EnvVar.CERTIFICATE_PATH];
     public string PfxPassword => _variables[EnvVar.PFX_PASSWORD];
+    public string OpenWeatherMapApiKey => _variables[EnvVar.OPENWEATHERMAP_API_KEY];
 
     private ConfigService(Dictionary<EnvVar, string> variables)
     {
