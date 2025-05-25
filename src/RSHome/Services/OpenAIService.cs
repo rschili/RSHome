@@ -259,7 +259,7 @@ public class OpenAIService
         }
         if(toolCalls > 0)
         {
-            sb.Append($" ({toolCalls} Toolaufrufe)");
+            sb.Append($" ({toolCalls} { (toolCalls == 1 ? "Toolaufruf" : "Toolaufrufe")})");
         }
         return sb.ToString();
     }
