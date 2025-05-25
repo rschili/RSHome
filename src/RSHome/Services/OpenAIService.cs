@@ -210,7 +210,7 @@ public class OpenAIService
                         case HEISE_TOOL_NAME:
                             try
                             {
-                                string heiseResponse = await ToolService.GetHeiseHeadlinesAsync().ConfigureAwait(false);
+                                string heiseResponse = await ToolService.GetHeiseHeadlinesAsync(15).ConfigureAwait(false);
                                 if (string.IsNullOrEmpty(heiseResponse))
                                 {
                                     Logger.LogWarning("Heise tool call returned no response.");
