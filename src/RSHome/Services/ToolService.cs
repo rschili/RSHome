@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -35,10 +36,7 @@ public class ToolService: IToolService
         response.EnsureSuccessStatusCode();
 
         string responseBody = await response.Content.ReadAsStringAsync();
-        using JsonDocument jsonDoc = JsonDocument.Parse(responseBody);
-        JsonElement root = jsonDoc.RootElement;
 
-        // Extract relevant information
         try
         {
             var weather = JsonSerializer.Deserialize<WeatherResponse>(responseBody);
@@ -56,12 +54,53 @@ public class ToolService: IToolService
             long sunriseUnix = weather.Sys.Sunrise;
             long sunsetUnix = weather.Sys.Sunset;
 
-            // Convert sunrise and sunset from Unix time to local time
             DateTimeOffset sunrise = DateTimeOffset.FromUnixTimeSeconds(sunriseUnix).ToLocalTime();
             DateTimeOffset sunset = DateTimeOffset.FromUnixTimeSeconds(sunsetUnix).ToLocalTime();
 
-            // Format the summary
             return $"Aktuelles Wetter in {cityName}, {country}: {description}, {temperature}°C (gefühlt {feelsLike}°C), Luftfeuchtigkeit: {humidity}%, Wind: {windSpeed} m/s, Sonnenaufgang: {sunrise:HH:mm}, Sonnenuntergang: {sunset:HH:mm}";
+        }
+        catch (JsonException)
+        {
+            throw ThrowWeatherApiException(responseBody);
+        }
+    }
+
+    public async Task<string> GetWeatherForecastAsync(string location)
+    {
+        if (string.IsNullOrWhiteSpace(location) || location.Length > 100)
+            throw new ArgumentException("Location cannot be null or empty and must not exceed 100 characters.", nameof(location));
+
+        using var httpClient = HttpClientFactory.CreateClient();
+        string url = $"https://api.openweathermap.org/data/2.5/forecast?q={Uri.EscapeDataString(location)}&appid={Config.OpenWeatherMapApiKey}&units=metric&lang=de";
+        HttpResponseMessage response = await httpClient.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        string responseBody = await response.Content.ReadAsStringAsync();
+
+        try
+        {
+            var weather = JsonSerializer.Deserialize<ForecastResponse>(responseBody);
+
+            if (weather == null)
+                throw ThrowWeatherApiException(responseBody);
+
+            List<string> forecastLines = new();
+            int count = weather.Forecasts.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (i == 0 || i == count - 1 || i % 3 == 0)
+                {
+                    var forecast = weather.Forecasts[i];
+                    DateTimeOffset dateTime = DateTimeOffset.FromUnixTimeSeconds(forecast.DateTimeUTC).ToLocalTime();
+                    string description = forecast.Weather?[0]?.Description ?? "";
+                    double temperature = forecast.Main.Temp;
+
+                    string dateTimeStr = dateTime.ToString("dddd d.M.yyyy HH:mm 'Uhr'");
+                    forecastLines.Add($"{dateTimeStr}: {description}, {temperature}°C");
+                }
+            }
+
+            return string.Join(Environment.NewLine, forecastLines);
         }
         catch (JsonException)
         {
@@ -86,6 +125,33 @@ public class ToolService: IToolService
             Logger.LogError("Failed to parse error response from Weather API: {ResponseBody}", responseBody);
             return new Exception("Unknown error from Weather API");
         }
+    }
+
+    public class ForecastResponse
+    {
+        [JsonPropertyName("list")]
+        public required List<Forecast> Forecasts { get; set; }
+
+        [JsonPropertyName("city")]
+        public required City City { get; set; }
+    }
+
+    public class City
+    {
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+    }
+
+    public class Forecast
+    {
+        [JsonPropertyName("dt")]
+        public required long DateTimeUTC { get; set; }
+
+        [JsonPropertyName("main")]
+        public required MainWeather Main { get; set; }
+
+        [JsonPropertyName("weather")]
+        public required List<WeatherInfo> Weather { get; set; }
     }
 
     public class WeatherResponse

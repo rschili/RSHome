@@ -24,11 +24,11 @@ public class OpenAIService
         ToolService = toolService ?? throw new ArgumentNullException(nameof(toolService));
     }
     
-    private const string WEATHER_TOOL_NAME = "get_weather";
-    private static readonly ChatTool getCurrentWeatherTool = ChatTool.CreateFunctionTool
+    private const string WEATHER_TOOL_NAME = "weather_current";
+    private static readonly ChatTool weatherCurrentTool = ChatTool.CreateFunctionTool
     (
         functionName: WEATHER_TOOL_NAME,
-        functionDescription: "Get the current weather for a given location",
+        functionDescription: "Get the current weather and sunrise/sunset for a given location",
         functionParameters: BinaryData.FromBytes("""
             {
                 "type": "object",
@@ -43,17 +43,41 @@ public class OpenAIService
             """u8.ToArray())
     );
 
+    private const string FORECAST_TOOL_NAME = "weather_forecast";
+    private static readonly ChatTool weatherForecastTool = ChatTool.CreateFunctionTool
+    (
+        functionName: FORECAST_TOOL_NAME,
+        functionDescription: "Get a 5 day weather forecast for a given location",
+        functionParameters: BinaryData.FromBytes("""
+            {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name or ZIP code to get the forecast for."
+                    }
+                },
+                "required": [ "location" ]
+            }
+            """u8.ToArray())
+    );
+
     private static readonly ChatCompletionOptions options = new()
     {
         MaxOutputTokenCount = 1000,
         ResponseFormat = ChatResponseFormat.CreateTextFormat(),
-        Tools = { getCurrentWeatherTool }
+        Tools = { weatherCurrentTool, weatherForecastTool },
     };
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
     {
         if (!RateLimiter.Leak())
             return null;
+
+        systemPrompt = $"""
+            {systemPrompt}
+            Aktuell ist [{DateTime.Now.ToLongDateString()}, {DateTime.Now.ToLongTimeString()} Uhr. 
+            """;
 
         var instructions = new List<ChatMessage>() { ChatMessage.CreateDeveloperMessage(systemPrompt) };
         foreach (var input in inputs)

@@ -5,10 +5,16 @@ using System.Security.Cryptography.X509Certificates;
 using RSHome.Services;
 using Microsoft.AspNetCore.Builder;
 using System.Text;
+using System.Globalization;
 
 Console.WriteLine($"Current user: {Environment.UserName}");
 Console.WriteLine("Loading variables...");
 var config = ConfigService.LoadFromEnvFile();
+
+var cultureInfo = new CultureInfo("de-DE");
+CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+Console.WriteLine($"Current culture: {CultureInfo.CurrentCulture.Name}");
 
 string dbPath = config.SqliteDbPath;
 string dbDirectory = Path.GetDirectoryName(dbPath) ?? throw new InvalidOperationException("Database path is invalid or null.");

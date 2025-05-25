@@ -11,5 +11,6 @@
         "requireExactSource": true,
         "targetArchitecture": "x86_64",
     },
-    "cSpell.enabled": false
+    "cSpell.enabled": false,
+    "makefile.configureOnOpen": false
 }

@@ -3,14 +3,18 @@ using NSubstitute;
 using DotNetEnv.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Logging;
+using System.Globalization;
 
 namespace RSHome.Tests.Integration;
 
 public class OpenAITests
 {
-    //[Test, Explicit]
+    [Test, Explicit]
     public async Task SendGenericRequest()
     {
+        var cultureInfo = new CultureInfo("de-DE");
+        CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+        CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
         var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
         string openAiKey = env["OPENAI_API_KEY"];
         if (string.IsNullOrEmpty(openAiKey))
