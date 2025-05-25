@@ -10,6 +10,7 @@ namespace RSHome.Services;
 public interface IToolService
 {
     Task<string> GetCurrentWeatherAsync(string location);
+    Task<string> GetWeatherForecastAsync(string location);
 }
 
 public class ToolService: IToolService

@@ -175,6 +175,30 @@ public class OpenAIService
                                 }
                                 break;
                             }
+                        case FORECAST_TOOL_NAME:
+                            {
+                                using JsonDocument argumentsJson = JsonDocument.Parse(toolCall.FunctionArguments);
+                                bool hasLocation = argumentsJson.RootElement.TryGetProperty("location", out JsonElement location);
+                                if (!hasLocation)
+                                    throw new ArgumentNullException(nameof(location), "The location argument is required for the weather forecast tool.");
+
+                                try
+                                {
+                                    string forecastResponse = await ToolService.GetWeatherForecastAsync(location.GetString()!).ConfigureAwait(false);
+                                    if (string.IsNullOrEmpty(forecastResponse))
+                                    {
+                                        Logger.LogWarning("Weather forecast tool call returned no response.");
+                                        instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Wettervorhersage gefunden."));
+                                    }
+                                    instructions.Add(new ToolChatMessage(toolCall.Id, forecastResponse));
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogError(ex, "An error occurred while calling the weather forecast tool.");
+                                    instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Wettervorhersage. {ex.Message}"));
+                                }
+                                break;
+                            }
                         default:
                             Logger.LogWarning("OpenAI called an unknown tool: {ToolName}. Depth: {Depth}", toolCall.FunctionName, depth);
                             instructions.Add(new ToolChatMessage(toolCall.Id, $"Unbekannter Toolaufruf: {toolCall.FunctionName}"));
