@@ -45,7 +45,7 @@ public class ToolTests
     public async Task ObtainWeatherForecastInDielheim()
     {
         var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
-        
+
         string apiKey = env["OPENWEATHERMAP_API_KEY"];
         if (string.IsNullOrEmpty(apiKey))
         {
@@ -72,5 +72,20 @@ public class ToolTests
         await Assert.That(response2).IsNotNullOrEmpty();
         if (logger != null)
             await logger.LogInformationAsync($"Response for ZIP 69234: {response2}");
+    }
+
+    [Test, Explicit]
+    public async Task ObtainHeiseHeadlines()
+    {
+        var config = Substitute.For<IConfigService>();
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
+        var service = new ToolService(config, NullLogger<ToolService>.Instance, httpClientFactory);
+
+        var response = await service.GetHeiseHeadlinesAsync(10).ConfigureAwait(false);
+        await Assert.That(response).IsNotNullOrEmpty();
+        var logger = TestContext.Current?.GetDefaultLogger();
+        if (logger != null)
+            await logger.LogInformationAsync($"Response for Heise Feed: {response}");
     }
 }

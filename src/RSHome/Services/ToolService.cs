@@ -1,9 +1,11 @@
 using System;
 using System.Net.Http;
+using System.ServiceModel.Syndication;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace RSHome.Services;
 
@@ -11,9 +13,10 @@ public interface IToolService
 {
     Task<string> GetCurrentWeatherAsync(string location);
     Task<string> GetWeatherForecastAsync(string location);
+    Task<string> GetHeiseHeadlinesAsync(int count = 5);
 }
 
-public class ToolService: IToolService
+public class ToolService : IToolService
 {
     public IConfigService Config { get; private init; }
     public ILogger Logger { get; private init; }
@@ -30,6 +33,8 @@ public class ToolService: IToolService
     {
         if (string.IsNullOrWhiteSpace(location) || location.Length > 100)
             throw new ArgumentException("Location cannot be null or empty and must not exceed 100 characters.", nameof(location));
+
+        Logger.LogInformation("Fetching current weather for location: {Location}", location);
 
         using var httpClient = HttpClientFactory.CreateClient();
         string url = $"https://api.openweathermap.org/data/2.5/weather?q={Uri.EscapeDataString(location)}&appid={Config.OpenWeatherMapApiKey}&units=metric&lang=de";
@@ -70,6 +75,8 @@ public class ToolService: IToolService
     {
         if (string.IsNullOrWhiteSpace(location) || location.Length > 100)
             throw new ArgumentException("Location cannot be null or empty and must not exceed 100 characters.", nameof(location));
+
+        Logger.LogInformation("Fetching weather forecast for location: {Location}", location);
 
         using var httpClient = HttpClientFactory.CreateClient();
         string url = $"https://api.openweathermap.org/data/2.5/forecast?q={Uri.EscapeDataString(location)}&appid={Config.OpenWeatherMapApiKey}&units=metric&lang=de";
@@ -207,5 +214,20 @@ public class ToolService: IToolService
 
         [JsonPropertyName("sunset")]
         public required long Sunset { get; set; }
+    }
+
+    public async Task<string> GetHeiseHeadlinesAsync(int count = 5)
+    {
+        Logger.LogInformation("Fetching Heise headlines, count: {Count}", count);
+        const string feedUrl = "https://www.heise.de/rss/heise-atom.xml";
+
+        using var httpClient = HttpClientFactory.CreateClient();
+        using var stream = await httpClient.GetStreamAsync(feedUrl);
+
+        using XmlReader reader = XmlReader.Create(stream);
+        SyndicationFeed feed = SyndicationFeed.Load(reader);
+
+        var summaries = feed.Items.Take(count).Select(item => item.Summary.Text);
+        return string.Join(Environment.NewLine, summaries);
     }
 }

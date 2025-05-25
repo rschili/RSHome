@@ -62,11 +62,18 @@ public class OpenAIService
             """u8.ToArray())
     );
 
+    private const string HEISE_TOOL_NAME = "heise_headlines";
+    private static readonly ChatTool heiseHeadlinesTool = ChatTool.CreateFunctionTool
+    (
+        functionName: HEISE_TOOL_NAME,
+        functionDescription: "Get the latest headlines from Heise Online (Technology related news)"
+    );
+
     private static readonly ChatCompletionOptions options = new()
     {
         MaxOutputTokenCount = 1000,
         ResponseFormat = ChatResponseFormat.CreateTextFormat(),
-        Tools = { weatherCurrentTool, weatherForecastTool },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool },
     };
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
@@ -116,7 +123,7 @@ public class OpenAIService
         }
     }
 
-    public async Task<string> CompleteChatAsync(List<ChatMessage> instructions, int depth = 1)
+    public async Task<string> CompleteChatAsync(List<ChatMessage> instructions, int depth = 1, int toolCalls = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions, nameof(instructions));
 
@@ -126,14 +133,14 @@ public class OpenAIService
         {
             case ChatFinishReason.Length:
                 Logger.LogWarning("Call reached token limit. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
-                text = GetCompletionText(response.Value);
+                text = GetCompletionText(response.Value, toolCalls);
                 if (!string.IsNullOrEmpty(text))
                     return text + "... (Tokenlimit erreicht)";
 
                 return string.Empty;
             case ChatFinishReason.Stop:
                 Logger.LogInformation("OpenAI call completed successfully. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
-                text = GetCompletionText(response.Value);
+                text = GetCompletionText(response.Value, toolCalls);
                 if (!string.IsNullOrEmpty(text))
                     return text;
 
@@ -149,6 +156,7 @@ public class OpenAIService
                 instructions.Add(new AssistantChatMessage(response));
                 foreach (ChatToolCall toolCall in response.Value.ToolCalls)
                 {
+                    toolCalls++;
                     switch (toolCall.FunctionName)
                     {
                         case WEATHER_TOOL_NAME:
@@ -199,6 +207,23 @@ public class OpenAIService
                                 }
                                 break;
                             }
+                        case HEISE_TOOL_NAME:
+                            try
+                            {
+                                string heiseResponse = await ToolService.GetHeiseHeadlinesAsync().ConfigureAwait(false);
+                                if (string.IsNullOrEmpty(heiseResponse))
+                                {
+                                    Logger.LogWarning("Heise tool call returned no response.");
+                                    instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Heise Online Nachrichten gefunden."));
+                                }
+                                instructions.Add(new ToolChatMessage(toolCall.Id, heiseResponse));
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogError(ex, "An error occurred while calling the Heise tool.");
+                                instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Heise Online Nachrichten. {ex.Message}"));
+                            }
+                            break;
                         default:
                             Logger.LogWarning("OpenAI called an unknown tool: {ToolName}. Depth: {Depth}", toolCall.FunctionName, depth);
                             instructions.Add(new ToolChatMessage(toolCall.Id, $"Unbekannter Toolaufruf: {toolCall.FunctionName}"));
@@ -206,7 +231,7 @@ public class OpenAIService
                     }
                 }
 
-                return await CompleteChatAsync(instructions, depth + 1).ConfigureAwait(false);
+                return await CompleteChatAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
 
             case ChatFinishReason.ContentFilter:
                 Logger.LogWarning("OpenAI call was filtered by content filter. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
@@ -218,7 +243,7 @@ public class OpenAIService
         }
     }
 
-    private string GetCompletionText(ChatCompletion completion)
+    private string GetCompletionText(ChatCompletion completion, int toolCalls)
     {
         StringBuilder sb = new();
         foreach (var content in completion.Content)
@@ -231,6 +256,10 @@ public class OpenAIService
             {
                 Logger.LogWarning("OpenAI refused to answer: {Text}", content.Text);
             }
+        }
+        if(toolCalls > 0)
+        {
+            sb.Append($" ({toolCalls} Toolaufrufe)");
         }
         return sb.ToString();
     }
