@@ -14,6 +14,7 @@ public interface IToolService
     Task<string> GetCurrentWeatherAsync(string location);
     Task<string> GetWeatherForecastAsync(string location);
     Task<string> GetHeiseHeadlinesAsync(int count = 5);
+    Task<string> GetPostillonHeadlinesAsync(int count = 5);
 }
 
 public class ToolService : IToolService
@@ -229,5 +230,49 @@ public class ToolService : IToolService
 
         var summaries = feed.Items.Take(count).Select(item => item.Summary.Text);
         return string.Join(Environment.NewLine, summaries);
+    }
+
+    public Task<string> GetPostillonHeadlinesAsync(int count = 5)
+    {
+        Logger.LogInformation("Fetching Postillon headlines, count: {Count}", count);
+        const string feedUrl = "https://follow.it/der-postillon-abo/rss";
+
+        using var httpClient = HttpClientFactory.CreateClient();
+        using var stream = httpClient.GetStreamAsync(feedUrl).Result;
+        using XmlReader reader = XmlReader.Create(stream);
+        List<string> titles = new();
+        while (reader.Read()) // rss feed uses version 0.91 which is not supported by SyndicationFeed.Load, so we just fetch all item/title elements manually
+        {
+            if (reader.NodeType == XmlNodeType.Element && reader.Name == "item")
+            {
+                // Innerhalb des <item>-Elements nach dem <title>-Element suchen
+                while (reader.Read())
+                {
+                    // Wenn das Ende des <item>-Elements erreicht ist, Schleife verlassen
+                    if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "item")
+                        break;
+
+                    // Wenn ein <title>-Element gefunden wird, dessen Inhalt lesen
+                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "title")
+                    {
+                        titles.Add(System.Net.WebUtility.HtmlDecode(reader.ReadElementContentAsString()));
+                    }
+                }
+            }
+        }
+
+        var summaries = titles.Where(PostillonFilter).Take(count);
+        return Task.FromResult(string.Join(Environment.NewLine, summaries));
+    }
+
+    private static readonly string[] PostillonBlacklist = ["Newsticker", "des Tages", "der Woche"];
+    public bool PostillonFilter(string title)
+    {
+        foreach (var word in PostillonBlacklist)
+        {
+            if (title.Contains(word, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
     }
 }

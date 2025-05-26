@@ -69,11 +69,18 @@ public class OpenAIService
         functionDescription: "Get the latest headlines from Heise Online (Technology related news)"
     );
 
+    private const string POSTILLON_TOOL_NAME = "postillon_headlines";
+    private static readonly ChatTool postillonHeadlinesTool = ChatTool.CreateFunctionTool
+    (
+        functionName: POSTILLON_TOOL_NAME,
+        functionDescription: "Get the latest headlines from 'Der Postillon', a german satire magazine"
+    );
+
     private static readonly ChatCompletionOptions options = new()
     {
         MaxOutputTokenCount = 1000,
         ResponseFormat = ChatResponseFormat.CreateTextFormat(),
-        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool },
     };
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
@@ -222,6 +229,23 @@ public class OpenAIService
                             {
                                 Logger.LogError(ex, "An error occurred while calling the Heise tool.");
                                 instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Heise Online Nachrichten. {ex.Message}"));
+                            }
+                            break;
+                        case POSTILLON_TOOL_NAME:
+                            try
+                            {
+                                string postillonResponse = await ToolService.GetPostillonHeadlinesAsync(10).ConfigureAwait(false);
+                                if (string.IsNullOrEmpty(postillonResponse))
+                                {
+                                    Logger.LogWarning("Postillon tool call returned no response.");
+                                    instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Postillon Nachrichten gefunden."));
+                                }
+                                instructions.Add(new ToolChatMessage(toolCall.Id, postillonResponse));
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogError(ex, "An error occurred while calling the Postillon tool.");
+                                instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Postillon Online Nachrichten. {ex.Message}"));
                             }
                             break;
                         default:

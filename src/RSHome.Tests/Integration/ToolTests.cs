@@ -88,4 +88,19 @@ public class ToolTests
         if (logger != null)
             await logger.LogInformationAsync($"Response for Heise Feed: {response}");
     }
+
+    [Test, Explicit]
+    public async Task ObtainPostillonHeadlines()
+    {
+        var config = Substitute.For<IConfigService>();
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
+        var service = new ToolService(config, NullLogger<ToolService>.Instance, httpClientFactory);
+
+        var response = await service.GetPostillonHeadlinesAsync(30).ConfigureAwait(false);
+        await Assert.That(response).IsNotNullOrEmpty();
+        var logger = TestContext.Current?.GetDefaultLogger();
+        if (logger != null)
+            await logger.LogInformationAsync($"Response for Postillon Feed: {response}");
+    }
 }
