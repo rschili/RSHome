@@ -232,13 +232,13 @@ public class ToolService : IToolService
         return string.Join(Environment.NewLine, summaries);
     }
 
-    public Task<string> GetPostillonHeadlinesAsync(int count = 5)
+    public async Task<string> GetPostillonHeadlinesAsync(int count = 5)
     {
         Logger.LogInformation("Fetching Postillon headlines, count: {Count}", count);
         const string feedUrl = "https://follow.it/der-postillon-abo/rss";
 
         using var httpClient = HttpClientFactory.CreateClient();
-        using var stream = httpClient.GetStreamAsync(feedUrl).Result;
+        using var stream = await httpClient.GetStreamAsync(feedUrl);
         using XmlReader reader = XmlReader.Create(stream);
         List<string> titles = new();
         while (reader.Read()) // rss feed uses version 0.91 which is not supported by SyndicationFeed.Load, so we just fetch all item/title elements manually
@@ -262,7 +262,7 @@ public class ToolService : IToolService
         }
 
         var summaries = titles.Where(PostillonFilter).Take(count);
-        return Task.FromResult(string.Join(Environment.NewLine, summaries));
+        return string.Join(Environment.NewLine, summaries);
     }
 
     private static readonly string[] PostillonBlacklist = ["Newsticker", "des Tages", "der Woche"];
