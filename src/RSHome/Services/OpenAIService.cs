@@ -35,7 +35,7 @@ public class OpenAIService
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "City name or ZIP code to get the current weather for."
+                        "description": "City name or ZIP code to get the current weather for. When providing a City name, an ISO 3166 country code can be appended with a comma e.g. 'Heidelberg,DE' to avoid ambiguity."
                     }
                 },
                 "required": [ "location" ]
@@ -54,7 +54,7 @@ public class OpenAIService
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "City name or ZIP code to get the forecast for."
+                        "description": "City name or ZIP code to get the current weather for. When providing a City name, an ISO 3166 country code can be appended with a comma e.g. 'Heidelberg,DE' to avoid ambiguity."
                     }
                 },
                 "required": [ "location" ]

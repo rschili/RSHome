@@ -265,7 +265,7 @@ public class ToolService : IToolService
         return string.Join(Environment.NewLine, summaries);
     }
 
-    private static readonly string[] PostillonBlacklist = ["Newsticker", "des Tages", "der Woche"];
+    private static readonly string[] PostillonBlacklist = ["Newsticker", "des Tages", "der Woche", "Sonntagsfrage"];
     public bool PostillonFilter(string title)
     {
         foreach (var word in PostillonBlacklist)
