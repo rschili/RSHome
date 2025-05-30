@@ -163,7 +163,7 @@ public class OpenAIService
             return await CreateResponseAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
         }
 
-        string output = response.GetOutputText();
+        string? output = response.GetOutputText();
         if (!string.IsNullOrEmpty(output))
         {
             if (toolCalls == 0)
@@ -171,7 +171,7 @@ public class OpenAIService
             return output + $"({toolCalls} {(toolCalls == 1 ? "Toolaufruf" : "Toolaufrufe")})";
         }
 
-        output = response.Error.Message;
+        output = response.Error?.Message;
         if (!string.IsNullOrEmpty(output))
         {
             Logger.LogError("OpenAI call finished with an error: {Error}. Depth: {Depth}. Total Token Count: {TokenCount}.", output, depth, response.Usage.TotalTokenCount);
