@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using OpenAI.Chat;
+using OpenAI.Responses;
 using RSMatrix.Http;
 
 namespace RSHome.Services;
@@ -9,7 +9,7 @@ namespace RSHome.Services;
 public class OpenAIService
 {
     public IConfigService Config { get; private init; }
-    public ChatClient Client { get; private init; }
+    public OpenAIResponseClient Client { get; private init; }
     public ILogger Logger { get; private init; }
 
     public IToolService ToolService { get; private init; }
@@ -20,12 +20,12 @@ public class OpenAIService
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        Client = new ChatClient(model: "gpt-4.1", apiKey: config.OpenAiApiKey); //  /*"o1" "o3-mini" "gpt-4o"*/
+        Client = new OpenAIResponseClient(model: "gpt-4.1", apiKey: config.OpenAiApiKey); //  /*"o1" "o3-mini" "gpt-4o"*/
         ToolService = toolService ?? throw new ArgumentNullException(nameof(toolService));
     }
     
     private const string WEATHER_TOOL_NAME = "weather_current";
-    private static readonly ChatTool weatherCurrentTool = ChatTool.CreateFunctionTool
+    private static readonly ResponseTool weatherCurrentTool = ResponseTool.CreateFunctionTool
     (
         functionName: WEATHER_TOOL_NAME,
         functionDescription: "Get the current weather and sunrise/sunset for a given location",
@@ -44,7 +44,7 @@ public class OpenAIService
     );
 
     private const string FORECAST_TOOL_NAME = "weather_forecast";
-    private static readonly ChatTool weatherForecastTool = ChatTool.CreateFunctionTool
+    private static readonly ResponseTool weatherForecastTool = ResponseTool.CreateFunctionTool
     (
         functionName: FORECAST_TOOL_NAME,
         functionDescription: "Get a 5 day weather forecast for a given location",
@@ -63,24 +63,35 @@ public class OpenAIService
     );
 
     private const string HEISE_TOOL_NAME = "heise_headlines";
-    private static readonly ChatTool heiseHeadlinesTool = ChatTool.CreateFunctionTool
+    private static readonly ResponseTool heiseHeadlinesTool = ResponseTool.CreateFunctionTool
     (
         functionName: HEISE_TOOL_NAME,
-        functionDescription: "Get the latest headlines from Heise Online (Technology related news)"
+        functionDescription: "Get the latest headlines from Heise Online (Technology related news)",
+        functionParameters: BinaryData.FromBytes("""
+            {}
+            """u8.ToArray())
     );
 
     private const string POSTILLON_TOOL_NAME = "postillon_headlines";
-    private static readonly ChatTool postillonHeadlinesTool = ChatTool.CreateFunctionTool
+    private static readonly ResponseTool postillonHeadlinesTool = ResponseTool.CreateFunctionTool
     (
         functionName: POSTILLON_TOOL_NAME,
-        functionDescription: "Get the latest headlines from 'Der Postillon', a german satire magazine"
+        functionDescription: "Get the latest headlines from 'Der Postillon', a german satire magazine",
+        functionParameters: BinaryData.FromBytes("""
+            {}
+            """u8.ToArray())
     );
 
-    private static readonly ChatCompletionOptions options = new()
+    private static readonly ResponseCreationOptions options = new()
     {
         MaxOutputTokenCount = 1000,
-        ResponseFormat = ChatResponseFormat.CreateTextFormat(),
+        StoredOutputEnabled = false,
+        TextOptions = new ResponseTextOptions
+        {
+            TextFormat = ResponseTextFormat.CreateTextFormat()
+        },
         Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool },
+        ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
@@ -93,7 +104,7 @@ public class OpenAIService
             Aktuell ist [{DateTime.Now.ToLongDateString()}, {DateTime.Now.ToLongTimeString()} Uhr. 
             """;
 
-        var instructions = new List<ChatMessage>() { ChatMessage.CreateDeveloperMessage(systemPrompt) };
+        var instructions = new List<ResponseItem>() { ResponseItem.CreateDeveloperMessageItem(systemPrompt) };
         foreach (var input in inputs)
         {
             var participantName = input.ParticipantName;
@@ -105,23 +116,19 @@ public class OpenAIService
 
             if (input.IsSelf)
             {
-                var message = ChatMessage.CreateAssistantMessage(input.Message);
-                if (input.ParticipantName != null)
-                    message.ParticipantName = participantName;
+                var message = ResponseItem.CreateAssistantMessageItem(input.Message);
                 instructions.Add(message);
             }
             else
             {
-                var message = ChatMessage.CreateUserMessage($"[[{input.ParticipantName}]] {input.Message}");
-                if (input.ParticipantName != null)
-                    message.ParticipantName = participantName;
+                var message = ResponseItem.CreateUserMessageItem($"[[{input.ParticipantName}]] {input.Message}");
                 instructions.Add(message);
             }
         }
 
         try
         {
-            return await CompleteChatAsync(instructions).ConfigureAwait(false);
+            return await CreateResponseAsync(instructions).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -130,162 +137,142 @@ public class OpenAIService
         }
     }
 
-    public async Task<string> CompleteChatAsync(List<ChatMessage> instructions, int depth = 1, int toolCalls = 0)
+    public async Task<string> CreateResponseAsync(List<ResponseItem> instructions, int depth = 1, int toolCalls = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions, nameof(instructions));
-
-        var response = await Client.CompleteChatAsync(instructions, options).ConfigureAwait(false);
-        string? text;
-        switch (response.Value.FinishReason)
+        if (depth > 3)
         {
-            case ChatFinishReason.Length:
-                Logger.LogWarning("Call reached token limit. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
-                text = GetCompletionText(response.Value, toolCalls);
-                if (!string.IsNullOrEmpty(text))
-                    return text + "... (Tokenlimit erreicht)";
-
-                return string.Empty;
-            case ChatFinishReason.Stop:
-                Logger.LogInformation("OpenAI call completed successfully. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
-                text = GetCompletionText(response.Value, toolCalls);
-                if (!string.IsNullOrEmpty(text))
-                    return text;
-
-                return string.Empty;
-
-            case ChatFinishReason.ToolCalls:
-                Logger.LogInformation("OpenAI call requested a tool call. Depth: {Depth}", depth);
-                if (depth >= 3)
-                {
-                    Logger.LogWarning("Maximum depth reached.");
-                    return "(Maximale Anzahl an Toolaufrufen erreicht)";
-                }
-                instructions.Add(new AssistantChatMessage(response));
-                foreach (ChatToolCall toolCall in response.Value.ToolCalls)
-                {
-                    toolCalls++;
-                    switch (toolCall.FunctionName)
-                    {
-                        case WEATHER_TOOL_NAME:
-                            {
-                                using JsonDocument argumentsJson = JsonDocument.Parse(toolCall.FunctionArguments);
-                                bool hasLocation = argumentsJson.RootElement.TryGetProperty("location", out JsonElement location);
-                                if (!hasLocation)
-                                    throw new ArgumentNullException(nameof(location), "The location argument is required for the weather tool.");
-
-                                try
-                                {
-                                    string weatherResponse = await ToolService.GetCurrentWeatherAsync(location.GetString()!).ConfigureAwait(false);
-                                    if (string.IsNullOrEmpty(weatherResponse))
-                                    {
-                                        Logger.LogWarning("Weather tool call returned no response.");
-                                        instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Wetterdaten gefunden."));
-                                    }
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, weatherResponse));
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.LogError(ex, "An error occurred while calling the weather tool.");
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Wetterdaten. {ex.Message}"));
-                                }
-                                break;
-                            }
-                        case FORECAST_TOOL_NAME:
-                            {
-                                using JsonDocument argumentsJson = JsonDocument.Parse(toolCall.FunctionArguments);
-                                bool hasLocation = argumentsJson.RootElement.TryGetProperty("location", out JsonElement location);
-                                if (!hasLocation)
-                                    throw new ArgumentNullException(nameof(location), "The location argument is required for the weather forecast tool.");
-
-                                try
-                                {
-                                    string forecastResponse = await ToolService.GetWeatherForecastAsync(location.GetString()!).ConfigureAwait(false);
-                                    if (string.IsNullOrEmpty(forecastResponse))
-                                    {
-                                        Logger.LogWarning("Weather forecast tool call returned no response.");
-                                        instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Wettervorhersage gefunden."));
-                                    }
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, forecastResponse));
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.LogError(ex, "An error occurred while calling the weather forecast tool.");
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Wettervorhersage. {ex.Message}"));
-                                }
-                                break;
-                            }
-                        case HEISE_TOOL_NAME:
-                            try
-                            {
-                                string heiseResponse = await ToolService.GetHeiseHeadlinesAsync(15).ConfigureAwait(false);
-                                if (string.IsNullOrEmpty(heiseResponse))
-                                {
-                                    Logger.LogWarning("Heise tool call returned no response.");
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Heise Online Nachrichten gefunden."));
-                                }
-                                instructions.Add(new ToolChatMessage(toolCall.Id, heiseResponse));
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogError(ex, "An error occurred while calling the Heise tool.");
-                                instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Heise Online Nachrichten. {ex.Message}"));
-                            }
-                            break;
-                        case POSTILLON_TOOL_NAME:
-                            try
-                            {
-                                string postillonResponse = await ToolService.GetPostillonHeadlinesAsync(10).ConfigureAwait(false);
-                                if (string.IsNullOrEmpty(postillonResponse))
-                                {
-                                    Logger.LogWarning("Postillon tool call returned no response.");
-                                    instructions.Add(new ToolChatMessage(toolCall.Id, "Keine Postillon Nachrichten gefunden."));
-                                }
-                                instructions.Add(new ToolChatMessage(toolCall.Id, postillonResponse));
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogError(ex, "An error occurred while calling the Postillon tool.");
-                                instructions.Add(new ToolChatMessage(toolCall.Id, $"Fehler beim Abrufen der Postillon Online Nachrichten. {ex.Message}"));
-                            }
-                            break;
-                        default:
-                            Logger.LogWarning("OpenAI called an unknown tool: {ToolName}. Depth: {Depth}", toolCall.FunctionName, depth);
-                            instructions.Add(new ToolChatMessage(toolCall.Id, $"Unbekannter Toolaufruf: {toolCall.FunctionName}"));
-                            break;
-                    }
-                }
-
-                return await CompleteChatAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
-
-            case ChatFinishReason.ContentFilter:
-                Logger.LogWarning("OpenAI call was filtered by content filter. Depth: {Depth}. Total Token Count: {TokenCount}.", depth, response.Value.Usage.TotalTokenCount);
-                return "(Inhalt von OpenAI gefiltert)";
-
-            default:
-                Logger.LogError("OpenAI call finished with an unknown reason: {FinishReason}. Depth: {Depth}. Total Token Count: {TokenCount}.", response.Value.FinishReason, depth, response.Value.Usage.TotalTokenCount);
-                return "(Unbekannter Abschlussgrund von OpenAI)";
+            Logger.LogWarning("OpenAI call reached maximum recursion depth of 5. Returning empty response.");
+            return "Maximale Rekursionstiefe erreicht. Keine Antwort generiert.";
         }
+
+        var result = await Client.CreateResponseAsync(instructions, options).ConfigureAwait(false);
+        var response = result.Value;
+        List<FunctionCallResponseItem> functionCalls = [.. response.OutputItems.Where(item => item is FunctionCallResponseItem).Cast<FunctionCallResponseItem>()];
+
+        if (functionCalls.Count > 0)
+        {
+            Logger.LogInformation("OpenAI call requested function calls. Depth: {Depth}.", depth);
+            foreach (var functionCall in functionCalls)
+            {
+                Logger.LogInformation("Function call requested: {FunctionName} with arguments: {Arguments}", functionCall.FunctionName, functionCall.FunctionArguments);
+                instructions.Add(functionCall);
+                toolCalls++;
+                await HandleFunctionCall(functionCall, instructions);
+            }
+            return await CreateResponseAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
+        }
+
+        string output = response.GetOutputText();
+        if (!string.IsNullOrEmpty(output))
+        {
+            if (toolCalls == 0)
+                return output;
+            return output + $"({toolCalls} {(toolCalls == 1 ? "Toolaufruf" : "Toolaufrufe")})";
+        }
+
+        output = response.Error.Message;
+        if (!string.IsNullOrEmpty(output))
+        {
+            Logger.LogError("OpenAI call finished with an error: {Error}. Depth: {Depth}. Total Token Count: {TokenCount}.", output, depth, response.Usage.TotalTokenCount);
+            return $"Fehler bei der OpenAI-Antwort: {output}";
+        }
+        
+        Logger.LogError($"OpenAI call returned no output or error. Depth: {depth}. Total Token Count: {response.Usage.TotalTokenCount}");
+        return "Keine Antwort von OpenAI erhalten.";
     }
 
-    private string GetCompletionText(ChatCompletion completion, int toolCalls)
+    private async Task HandleFunctionCall(FunctionCallResponseItem functionCall, List<ResponseItem> instructions)
     {
-        StringBuilder sb = new();
-        foreach (var content in completion.Content)
+        switch (functionCall.FunctionName)
         {
-            if (content.Kind == ChatMessageContentPartKind.Text && !string.IsNullOrEmpty(content.Text))
-            {
-                sb.Append(content.Text);
-            }
-            if(content.Kind == ChatMessageContentPartKind.Refusal && !string.IsNullOrEmpty(content.Text))
-            {
-                Logger.LogWarning("OpenAI refused to answer: {Text}", content.Text);
-            }
+            case WEATHER_TOOL_NAME:
+                {
+                    using JsonDocument argumentsJson = JsonDocument.Parse(functionCall.FunctionArguments);
+                    bool hasLocation = argumentsJson.RootElement.TryGetProperty("location", out JsonElement location);
+                    if (!hasLocation)
+                        throw new ArgumentNullException(nameof(location), "The location argument is required for the weather tool.");
+
+                    try
+                    {
+                        string weatherResponse = await ToolService.GetCurrentWeatherAsync(location.GetString()!).ConfigureAwait(false);
+                        if (string.IsNullOrEmpty(weatherResponse))
+                        {
+                            Logger.LogWarning("Weather tool call returned no response.");
+                            instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, "Keine Wetterdaten gefunden."));
+                        }
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, weatherResponse));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "An error occurred while calling the weather tool.");
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Wetterdaten. {ex.Message}"));
+                    }
+                    break;
+                }
+            case FORECAST_TOOL_NAME:
+                {
+                    using JsonDocument argumentsJson = JsonDocument.Parse(functionCall.FunctionArguments);
+                    bool hasLocation = argumentsJson.RootElement.TryGetProperty("location", out JsonElement location);
+                    if (!hasLocation)
+                        throw new ArgumentNullException(nameof(location), "The location argument is required for the weather forecast tool.");
+
+                    try
+                    {
+                        string forecastResponse = await ToolService.GetWeatherForecastAsync(location.GetString()!).ConfigureAwait(false);
+                        if (string.IsNullOrEmpty(forecastResponse))
+                        {
+                            Logger.LogWarning("Weather forecast tool call returned no response.");
+                            instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, "Keine Wettervorhersage gefunden."));
+                        }
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, forecastResponse));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "An error occurred while calling the weather forecast tool.");
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Wettervorhersage. {ex.Message}"));
+                    }
+                    break;
+                }
+            case HEISE_TOOL_NAME:
+                try
+                {
+                    string heiseResponse = await ToolService.GetHeiseHeadlinesAsync(15).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(heiseResponse))
+                    {
+                        Logger.LogWarning("Heise tool call returned no response.");
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, "Keine Heise Online Nachrichten gefunden."));
+                    }
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, heiseResponse));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "An error occurred while calling the Heise tool.");
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Heise Online Nachrichten. {ex.Message}"));
+                }
+                break;
+            case POSTILLON_TOOL_NAME:
+                try
+                {
+                    string postillonResponse = await ToolService.GetPostillonHeadlinesAsync(10).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(postillonResponse))
+                    {
+                        Logger.LogWarning("Postillon tool call returned no response.");
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, "Keine Postillon Nachrichten gefunden."));
+                    }
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, postillonResponse));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "An error occurred while calling the Postillon tool.");
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Postillon Online Nachrichten. {ex.Message}"));
+                }
+                break;
+            default:
+                Logger.LogWarning("OpenAI called an unknown tool: {ToolName}.", functionCall.FunctionName);
+                instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Unbekannter Toolaufruf: {functionCall.FunctionName}"));
+                break;
         }
-        if(toolCalls > 0)
-        {
-            sb.Append($" ({toolCalls} { (toolCalls == 1 ? "Toolaufruf" : "Toolaufrufe")})");
-        }
-        return sb.ToString();
     }
 
     public static string SanitizeName(string participantName)
