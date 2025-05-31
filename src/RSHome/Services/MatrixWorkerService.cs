@@ -13,7 +13,7 @@ public class MatrixWorkerService : BackgroundService
     private ILogger Logger { get; init; }
     private IConfigService Config { get; init; }
     private IHttpClientFactory HttpClientFactory { get; init; }
-    private SqliteService SqliteService { get; init; }
+    private ISqliteService SqliteService { get; init; }
     private OpenAIService OpenAIService { get; init; }
 
     public bool IsRunning => _client != null;
@@ -54,7 +54,7 @@ public class MatrixWorkerService : BackgroundService
         return string.Format(DEFAULT_INSTRUCTION, topic);
     }
 
-    public MatrixWorkerService(ILogger<MatrixWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory, SqliteService sqliteService, OpenAIService openAIService)
+    public MatrixWorkerService(ILogger<MatrixWorkerService> logger, IConfigService config, IHttpClientFactory httpClientFactory, ISqliteService sqliteService, OpenAIService openAIService)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));

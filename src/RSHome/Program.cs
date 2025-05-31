@@ -55,7 +55,7 @@ builder.Services
     .AddSingleton<SecurityService>()
     .AddSingleton<WordleService>()
     .AddHttpClient()
-    .AddSingleton(sqliteService)
+    .AddSingleton<ISqliteService>(sqliteService)
     .AddSingleton<IToolService, ToolService>()
     .AddSingleton<OpenAIService>()
     .AddSingleton<DiscordWorkerService>()

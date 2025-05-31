@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Discord;
@@ -16,7 +17,7 @@ public class DiscordWorkerService : BackgroundService
 {
     public ILogger Logger { get; init; }
     private IConfigService Config { get; init; }
-    private SqliteService SqliteService { get; init; }
+    private ISqliteService SqliteService { get; init; }
     private OpenAIService OpenAIService { get; init; }
 
     public bool IsRunning { get; private set; }
@@ -61,10 +62,11 @@ public class DiscordWorkerService : BackgroundService
 
     internal const string STATUS_INSTRUCTION = $"""
         {GENERIC_INSTRUCTION}
-        Generiere fünf Statusmeldungen für heute, die ich als deinen aktuellen Status über den Tag verteilt setzen werde. Jede Meldung soll maximal 5 Worte lang sein, formattiere das Ergebnis als Json Array.
+        Generiere fünf Aktivitäten für dich, die als Statusmeldungen verwendet werden können.
+        Jede Meldung soll maximal 5 Worte lang sein, formattiere das Ergebnis als Json.
         """;
 
-    public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, SqliteService sqliteService, OpenAIService openAIService)
+    public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, ISqliteService sqliteService, OpenAIService openAIService)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));
@@ -320,38 +322,48 @@ public class DiscordWorkerService : BackgroundService
         DateTimeOffset now = DateTimeOffset.UtcNow;
         if (now - LastStatusUpdate < TimeSpan.FromMinutes(120))
             return;
-
+    
         LastStatusUpdate = now;
         if (StatusMessages.IsEmpty)
-        { // we need to generate new status messages
-            var response = await OpenAIService.GenerateResponseAsync(STATUS_INSTRUCTION, new List<AIMessage>()).ConfigureAwait(false);
-            // response should be a json array
-            if (string.IsNullOrEmpty(response))
+        {
+            var newMessages = await CreateNewStatusMessages();
+            foreach (var msg in newMessages)
             {
-                Logger.LogWarning("OpenAI did not return a response to generating status messages.");
-                return; // may be rate limited 
-            }
-            response = response.Trim();
-            if (response.StartsWith("[") && response.EndsWith("]"))
-            {
-                var messages = response[1..^1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var message in messages)
-                {
-                    var trimmedMessage = message.Trim().Trim('"');
-                    if (!string.IsNullOrWhiteSpace(trimmedMessage) && trimmedMessage.Length < 50)
-                        StatusMessages.Enqueue(trimmedMessage);
-                }
-            }
-            else
-            {
-                Logger.LogWarning("OpenAI did not return a valid json array for status messages: {Response}", response);
-                return;
+                StatusMessages.Enqueue(msg);
             }
         }
-
+    
         var activity = StatusMessages.TryDequeue(out var statusMessage) ? statusMessage : null;
         CurrentActivity = activity;
         await Client.SetCustomStatusAsync(activity).ConfigureAwait(false);
+    }
+
+    internal async Task<List<string>> CreateNewStatusMessages()
+    {
+        List<string> statusMessages = [];
+        var response = await OpenAIService.GenerateResponseAsync(STATUS_INSTRUCTION, new List<AIMessage>(), OpenAIService.StructuredJsonArrayOptions).ConfigureAwait(false);
+        // response should be a json array
+        if (string.IsNullOrEmpty(response))
+        {
+            Logger.LogWarning("OpenAI did not return a response to generating status messages.");
+            return statusMessages;
+        }
+        using var doc = JsonDocument.Parse(response);
+        if (doc.RootElement.TryGetProperty("values", out var valuesElement) && valuesElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in valuesElement.EnumerateArray())
+            {
+                var trimmedMessage = item.GetString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(trimmedMessage) && trimmedMessage.Length < 50)
+                    statusMessages.Add(trimmedMessage);
+            }
+        }
+        else
+        {
+            Logger.LogWarning("OpenAI did not return a valid 'values' array for status messages: {Response}", response);
+        }
+        
+        return statusMessages;
     }
 
     private bool ShouldRespond(SocketMessage arg)

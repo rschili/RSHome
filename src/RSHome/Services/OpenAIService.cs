@@ -82,7 +82,7 @@ public class OpenAIService
             """u8.ToArray())
     );
 
-    private static readonly ResponseCreationOptions options = new()
+    private static readonly ResponseCreationOptions DefaultOptions = new()
     {
         MaxOutputTokenCount = 1000,
         StoredOutputEnabled = false,
@@ -94,7 +94,34 @@ public class OpenAIService
         ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
-    public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs)
+    internal static readonly ResponseCreationOptions StructuredJsonArrayOptions = new()
+    {
+        MaxOutputTokenCount = 1000,
+        StoredOutputEnabled = false,
+        TextOptions = new ResponseTextOptions
+        {
+            TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("structured_array",
+            BinaryData.FromBytes("""
+            {
+                "type": "object",
+                "properties": {
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [ "values" ],
+                "additionalProperties": false
+            }
+            """u8.ToArray()), null, true)
+        },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool },
+        ToolChoice = ResponseToolChoice.CreateAutoChoice(),
+    };
+
+    public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs, ResponseCreationOptions? options = null)
     {
         if (!RateLimiter.Leak())
             return null;
@@ -128,7 +155,7 @@ public class OpenAIService
 
         try
         {
-            return await CreateResponseAsync(instructions).ConfigureAwait(false);
+            return await CreateResponseAsync(instructions, 1, 0, options).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -137,7 +164,7 @@ public class OpenAIService
         }
     }
 
-    public async Task<string> CreateResponseAsync(List<ResponseItem> instructions, int depth = 1, int toolCalls = 0)
+    public async Task<string> CreateResponseAsync(List<ResponseItem> instructions, int depth = 1, int toolCalls = 0, ResponseCreationOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(instructions, nameof(instructions));
         if (depth > 3)
@@ -146,7 +173,7 @@ public class OpenAIService
             return "Maximale Rekursionstiefe erreicht. Keine Antwort generiert.";
         }
 
-        var result = await Client.CreateResponseAsync(instructions, options).ConfigureAwait(false);
+        var result = await Client.CreateResponseAsync(instructions, options ?? OpenAIService.DefaultOptions).ConfigureAwait(false);
         var response = result.Value;
         List<FunctionCallResponseItem> functionCalls = [.. response.OutputItems.Where(item => item is FunctionCallResponseItem).Cast<FunctionCallResponseItem>()];
 

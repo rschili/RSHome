@@ -4,7 +4,20 @@ using Microsoft.Data.Sqlite;
 
 namespace RSHome.Services;
 
-public class SqliteService : IDisposable
+public interface ISqliteService : IDisposable
+{
+    SqliteConnection Connection { get; }
+    Task AddDiscordMessageAsync(ulong id, DateTimeOffset timestamp, ulong userId, string userLabel, string body, bool isFromSelf, ulong channelId);
+    Task AddMatrixMessageAsync(string id, DateTimeOffset timestamp, string userId, string userLabel, string body, bool isFromSelf, string room);
+    Task<List<DiscordMessage>> GetLastDiscordMessagesForChannelAsync(ulong channelId, int count);
+    Task<List<MatrixMessage>> GetLastMatrixMessagesForRoomAsync(string room, int count);
+    Task<List<MatrixMessage>> GetOwnMessagesForTodayPlusLastForRoomAsync(string room);
+    Task SetSettingAsync(string key, string value);
+    Task<string?> GetSettingOrDefaultAsync(string key);
+    Task RemoveSettingAsync(string key);
+}
+
+public class SqliteService : ISqliteService
 {
     public SqliteConnection Connection { get; private init; }
     private SqliteService(SqliteConnection connection)
