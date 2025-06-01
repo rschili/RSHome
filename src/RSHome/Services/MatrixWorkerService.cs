@@ -184,7 +184,7 @@ public class MatrixWorkerService : BackgroundService
 
     public async Task RespondToMessage(ReceivedTextMessage message, JoinedTextChannel<string> channel, string sanitizedMessage)
     {
-        await message.Room.SendTypingNotificationAsync(2000).ConfigureAwait(false);
+        await message.Room.SendTypingNotificationAsync(4000).ConfigureAwait(false);
 
         var history = await SqliteService.GetOwnMessagesForTodayPlusLastForRoomAsync(channel.Id).ConfigureAwait(false);
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();

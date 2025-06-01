@@ -177,7 +177,14 @@ public class OpenAIService
         var response = result.Value;
         List<FunctionCallResponseItem> functionCalls = [.. response.OutputItems.Where(item => item is FunctionCallResponseItem).Cast<FunctionCallResponseItem>()];
         List<WebSearchCallResponseItem> webSearchCalls = [.. response.OutputItems.Where(item => item is WebSearchCallResponseItem).Cast<WebSearchCallResponseItem>()];
-
+        if(webSearchCalls.Count > 0)
+        {
+            foreach (var webSearchCall in webSearchCalls)
+            {
+                instructions.Add(webSearchCall);
+                toolCalls++;
+            }
+        }
         if (functionCalls.Count > 0)
         {
             Logger.LogInformation("OpenAI call requested function calls. Depth: {Depth}.", depth);
@@ -188,7 +195,7 @@ public class OpenAIService
                 toolCalls++;
                 await HandleFunctionCall(functionCall, instructions);
             }
-            return await CreateResponseAsync(instructions, depth + 1, toolCalls + webSearchCalls.Count).ConfigureAwait(false);
+            return await CreateResponseAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
         }
 
         string? output = response.GetOutputText();
