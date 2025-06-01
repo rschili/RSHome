@@ -71,4 +71,31 @@ public class OpenAITests
         if (logger != null)
             await logger.LogInformationAsync($"Response: {response}");
     }
+
+    [Test, Explicit]
+    public async Task RequestWebSearch()
+    {
+        var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
+        string openAiKey = env["OPENAI_API_KEY"];
+        if (string.IsNullOrEmpty(openAiKey))
+        {
+            Assert.Fail("OPENAI_API_KEY is not set in the .env file.");
+            return;
+        }
+
+        var config = Substitute.For<IConfigService>();
+        config.OpenAiApiKey.Returns(openAiKey);
+        var toolService = Substitute.For<IToolService>();
+        var aiService = new OpenAIService(config, NullLogger<OpenAIService>.Instance, toolService);
+
+        List<AIMessage> messages = new()
+        {
+            new AIMessage(false, "Suche bitte im Netz nach Kinofilmen, die nächste Woche erscheinen.", "sikk"),
+        };
+        var response = await aiService.GenerateResponseAsync(DiscordWorkerService.DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
+        await Assert.That(response).IsNotNullOrEmpty();
+        var logger = TestContext.Current?.GetDefaultLogger();
+        if (logger != null)
+            await logger.LogInformationAsync($"Response: {response}");
+    }
 }

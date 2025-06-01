@@ -90,7 +90,7 @@ public class OpenAIService
         {
             TextFormat = ResponseTextFormat.CreateTextFormat()
         },
-        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool, ResponseTool.CreateWebSearchTool() },
         ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
@@ -173,9 +173,10 @@ public class OpenAIService
             return "Maximale Rekursionstiefe erreicht. Keine Antwort generiert.";
         }
 
-        var result = await Client.CreateResponseAsync(instructions, options ?? OpenAIService.DefaultOptions).ConfigureAwait(false);
+        var result = await Client.CreateResponseAsync(instructions, options ?? DefaultOptions).ConfigureAwait(false);
         var response = result.Value;
         List<FunctionCallResponseItem> functionCalls = [.. response.OutputItems.Where(item => item is FunctionCallResponseItem).Cast<FunctionCallResponseItem>()];
+        List<WebSearchCallResponseItem> webSearchCalls = [.. response.OutputItems.Where(item => item is WebSearchCallResponseItem).Cast<WebSearchCallResponseItem>()];
 
         if (functionCalls.Count > 0)
         {
@@ -187,7 +188,7 @@ public class OpenAIService
                 toolCalls++;
                 await HandleFunctionCall(functionCall, instructions);
             }
-            return await CreateResponseAsync(instructions, depth + 1, toolCalls).ConfigureAwait(false);
+            return await CreateResponseAsync(instructions, depth + 1, toolCalls + webSearchCalls.Count).ConfigureAwait(false);
         }
 
         string? output = response.GetOutputText();
@@ -195,7 +196,7 @@ public class OpenAIService
         {
             if (toolCalls == 0)
                 return output;
-            return output + $"({toolCalls} {(toolCalls == 1 ? "Toolaufruf" : "Toolaufrufe")})";
+            return output + $"(*{toolCalls})";
         }
 
         output = response.Error?.Message;
