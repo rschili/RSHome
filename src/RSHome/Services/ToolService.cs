@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Xml;
+using HADotNet.Core;
+using HADotNet.Core.Clients;
 
 namespace RSHome.Services;
 
@@ -15,6 +17,7 @@ public interface IToolService
     Task<string> GetWeatherForecastAsync(string location);
     Task<string> GetHeiseHeadlinesAsync(int count = 5);
     Task<string> GetPostillonHeadlinesAsync(int count = 5);
+    Task<string> GetCupraInfoAsync();
 }
 
 public class ToolService : IToolService
@@ -274,5 +277,28 @@ public class ToolService : IToolService
                 return false;
         }
         return true;
+    }
+
+    public async Task<string> GetCupraInfoAsync()
+    {
+        if (!ClientFactory.IsInitialized)
+        {
+            Logger.LogInformation("Initializing Home Assistant client.");
+            ClientFactory.Initialize(Config.HomeAssistantUrl, Config.HomeAssistantToken);
+        }
+
+        var statesClient = ClientFactory.GetClient<StatesClient>();
+
+        var charge = await statesClient.GetState("sensor.cupra_born_state_of_charge");
+        var charging = await statesClient.GetState("sensor.cupra_born_charging_state");
+        var doorStatus = await statesClient.GetState("binary_sensor.cupra_born_door_lock_status");
+        var onlineStatus = await statesClient.GetState("binary_sensor.cupra_born_car_is_online");
+        var range = await statesClient.GetState("sensor.cupra_born_range_in_kilometers");
+
+        return $"""
+            Aktuell ist der Akku des Cupra Born bei {charge.State}%.
+            Lade-Status: {charging.State}. Türen: {(doorStatus.State == "off" ? "verriegelt" : "entriegelt")}.
+            Onlinestatus: {onlineStatus.State}. Reichweite beträgt {range.State} km.
+            """;
     }
 }

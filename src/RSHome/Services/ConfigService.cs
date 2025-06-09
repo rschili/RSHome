@@ -23,6 +23,8 @@ public interface IConfigService
     string CertificatePath { get; }
     string PfxPassword { get; }
     string OpenWeatherMapApiKey { get; }
+    string HomeAssistantUrl { get; }
+    string HomeAssistantToken { get; }
 }
 
 
@@ -42,7 +44,10 @@ public enum EnvVar
     SQLITE_DB_PATH,
     CERTIFICATE_PATH,
     PFX_PASSWORD,
-    OPENWEATHERMAP_API_KEY
+    OPENWEATHERMAP_API_KEY,
+    HA_API_URL,
+    HA_TOKEN
+
 }
 
 public class ConfigService : IConfigService
@@ -64,6 +69,8 @@ public class ConfigService : IConfigService
     public string CertificatePath => _variables[EnvVar.CERTIFICATE_PATH];
     public string PfxPassword => _variables[EnvVar.PFX_PASSWORD];
     public string OpenWeatherMapApiKey => _variables[EnvVar.OPENWEATHERMAP_API_KEY];
+    public string HomeAssistantUrl => _variables[EnvVar.HA_API_URL];
+    public string HomeAssistantToken => _variables[EnvVar.HA_TOKEN];
 
     private ConfigService(Dictionary<EnvVar, string> variables)
     {

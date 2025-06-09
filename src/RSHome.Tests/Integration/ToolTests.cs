@@ -103,4 +103,38 @@ public class ToolTests
         if (logger != null)
             await logger.LogInformationAsync($"Response for Postillon Feed: {response}");
     }
+
+    [Test, Explicit]
+    public async Task ObtainCupraInfo()
+    {
+        var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
+
+        string url = env["HA_API_URL"];
+        if (string.IsNullOrEmpty(url))
+        {
+            Assert.Fail("HA_API_URL is not set in the .env file.");
+            return;
+        }
+        string token = env["HA_TOKEN"];
+        if (string.IsNullOrEmpty(token))
+        {
+            Assert.Fail("HA_TOKEN is not set in the .env file.");
+            return;
+        }
+
+
+        var config = Substitute.For<IConfigService>();
+        config.HomeAssistantUrl.Returns(url);
+        config.HomeAssistantToken.Returns(token);
+        
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
+        var service = new ToolService(config, NullLogger<ToolService>.Instance, httpClientFactory);
+
+        var response = await service.GetCupraInfoAsync().ConfigureAwait(false);
+        await Assert.That(response).IsNotNullOrEmpty();
+        var logger = TestContext.Current?.GetDefaultLogger();
+        if (logger != null)
+            await logger.LogInformationAsync($"Response for Cupra Info: {response}");
+    }
 }

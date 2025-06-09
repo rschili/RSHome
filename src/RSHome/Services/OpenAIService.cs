@@ -23,7 +23,7 @@ public class OpenAIService
         Client = new OpenAIResponseClient(model: "gpt-4.1", apiKey: config.OpenAiApiKey); //  /*"o1" "o3-mini" "gpt-4o"*/
         ToolService = toolService ?? throw new ArgumentNullException(nameof(toolService));
     }
-    
+
     private const string WEATHER_TOOL_NAME = "weather_current";
     private static readonly ResponseTool weatherCurrentTool = ResponseTool.CreateFunctionTool
     (
@@ -82,6 +82,17 @@ public class OpenAIService
             """u8.ToArray())
     );
 
+    private const string CAR_TOOL_NAME = "car_status";
+        private static readonly ResponseTool carStatusTool = ResponseTool.CreateFunctionTool
+    (
+        functionName: CAR_TOOL_NAME,
+        functionDescription: "Get status of the car of the user krael aka noppel (charge, range, doors, etc.)",
+        functionParameters: BinaryData.FromBytes("""
+            {}
+            """u8.ToArray())
+    );
+
+
     private static readonly ResponseCreationOptions DefaultOptions = new()
     {
         MaxOutputTokenCount = 1000,
@@ -90,7 +101,7 @@ public class OpenAIService
         {
             TextFormat = ResponseTextFormat.CreateTextFormat()
         },
-        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool, ResponseTool.CreateWebSearchTool() },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool, carStatusTool, ResponseTool.CreateWebSearchTool() },
         ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
@@ -117,7 +128,7 @@ public class OpenAIService
             }
             """u8.ToArray()), null, true)
         },
-        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool },
+        Tools = { weatherCurrentTool, weatherForecastTool, heiseHeadlinesTool, postillonHeadlinesTool, carStatusTool },
         ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
@@ -301,6 +312,23 @@ public class OpenAIService
                 {
                     Logger.LogError(ex, "An error occurred while calling the Postillon tool.");
                     instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Postillon Online Nachrichten. {ex.Message}"));
+                }
+                break;
+            case CAR_TOOL_NAME:
+                try
+                {
+                    string carStatusResponse = await ToolService.GetCupraInfoAsync().ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(carStatusResponse))
+                    {
+                        Logger.LogWarning("Car status tool call returned no response.");
+                        instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, "Keine Fahrzeugdaten gefunden."));
+                    }
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, carStatusResponse));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "An error occurred while calling the car status tool.");
+                    instructions.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, $"Fehler beim Abrufen der Fahrzeugdaten. {ex.Message}"));
                 }
                 break;
             default:

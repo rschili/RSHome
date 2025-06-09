@@ -46,6 +46,7 @@ builder.Logging
     .AddFilter("System.Net.Http.HttpClient", LogLevel.Warning) // Filter logs from HttpClient
     .AddFilter("RSHome.Services.MatrixWorkerService", LogLevel.Warning)
     .AddFilter("RSHome.Services.OpenAIService", LogLevel.Information)
+    .AddFilter("RSHome.Services.ToolService", LogLevel.Information)
     .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 

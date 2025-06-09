@@ -98,4 +98,36 @@ public class OpenAITests
         if (logger != null)
             await logger.LogInformationAsync($"Response: {response}");
     }
+
+    [Test, Explicit]
+    public async Task SendCarToolRequest()
+    {
+        var env = DotNetEnv.Env.NoEnvVars().TraversePath().Load().ToDotEnvDictionary();
+        string openAiKey = env["OPENAI_API_KEY"];
+        if (string.IsNullOrEmpty(openAiKey))
+        {
+            Assert.Fail("OPENAI_API_KEY is not set in the .env file.");
+            return;
+        }
+
+        var config = Substitute.For<IConfigService>();
+        config.OpenAiApiKey.Returns(openAiKey);
+        var toolService = Substitute.For<IToolService>();
+        toolService.GetCupraInfoAsync()
+            .Returns(callInfo => Task.FromResult($"Der Cupra Born ist aktuell zu 55% geladen und hat eine Reichweite von 250 km."));
+        var aiService = new OpenAIService(config, NullLogger<OpenAIService>.Instance, toolService);
+
+        List<AIMessage> messages = new()
+        {
+            new AIMessage(false, "Hey, wie ist das Wetter in Dielheim?", "sikk"),
+            new AIMessage(true, "Das Wetter in Dielheim ist sonnig und warm.", "Wernstrom"),
+            new AIMessage(false, "Wieviel Ladung hat mein Auto gerade?", "krael"),
+        };
+        var response = await aiService.GenerateResponseAsync(DiscordWorkerService.DEFAULT_INSTRUCTION, messages).ConfigureAwait(false);
+        await Assert.That(response).IsNotNullOrEmpty();
+        var logger = TestContext.Current?.GetDefaultLogger();
+        if (logger != null)
+            await logger.LogInformationAsync($"Response: {response}");
+    }
 }
+
