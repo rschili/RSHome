@@ -11,7 +11,7 @@
             "name": "Tests Debug",
             "type": "dotnet",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/RSMatrix.Tests/RSMatrix.Tests.csproj"
+            "projectPath": "${workspaceFolder}/src/RSHome.Tests/RSHome.Tests.csproj"
         }
     ]
 }

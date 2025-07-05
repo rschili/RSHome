@@ -136,7 +136,7 @@ public class MatrixWorkerService : BackgroundService
         try
         {
             var age = DateTimeOffset.Now - message.Timestamp; // filter the message spam we receive from the server at start
-            if (age.TotalSeconds > 10)
+            if (age.TotalSeconds > 30)
                 return;
 
             if (message.ThreadId != null) // ignore messages in threads for now
