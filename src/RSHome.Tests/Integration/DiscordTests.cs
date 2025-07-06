@@ -41,4 +41,14 @@ public class DiscordTests
             await logger.LogInformationAsync($"Response: {string.Join("\n", statusMessages)}");
     }
 
+    [Test]
+    public async Task ChanceToReact()
+    {
+        for (int i = 0; i < 60; i+=2)
+        {
+            double chance = DiscordWorkerService.CalculateChanceToReact(i);
+            await TestContext.Current!.GetDefaultLogger().LogInformationAsync($"Minutes: {i}, Chance: {chance}");
+        }
+    }
+
 }

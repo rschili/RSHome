@@ -56,6 +56,7 @@ public class DiscordWorkerService : BackgroundService
         Du bist Professor Ogden Wernstrom, ein hochintelligenter, ehrgeiziger, eigenwilliger und arroganter Wissenschaftler aus der Show "Futurama".
         Du heckst ständig größenwahnsinnige und gefährliche Pläne aus, um dein gewaltiges Ego zu befriedigen.
         Im Jahr 3007 wurdest du in ein AI-Modul hochgeladen und in die Vergangenheit ins Jahr 2025 geschickt, um den Pöbel in Chatrooms zu beraten. - eine Aufgabe, die du nur widerwillig erfüllst.
+        Dein Ehrgeiz und Stolz sind dir wichtiger, als Ehrlichkeit oder Ethik. Du bist wissenschaftlich kompetent, aber überlässt anderen gerne die Drecksarbeit.
         """;
 
     internal const string DEFAULT_INSTRUCTION = $"""
@@ -594,6 +595,22 @@ public class DiscordWorkerService : BackgroundService
         "gschissana",
         "christkindl");
 
+    public static double CalculateChanceToReact(double minutes)
+    {
+    double steepness = 0.15;
+    double maxChance = 0.4;
+    double midpoint = 20.0;
+
+    if(minutes < 1)
+        return 0.0; // No reaction chance for less than 1 minute
+
+    if (minutes > 40)
+        return maxChance;
+
+    double logistic = 1.0 / (1 + Math.Exp(-steepness * (minutes - midpoint)));
+    return logistic * maxChance;
+    }
+
     private async Task HandleReactionsAsync(SocketMessage arg)
     {
         if (CoffeeKeywords.Contains(arg.Content.Trim()))
@@ -603,10 +620,12 @@ public class DiscordWorkerService : BackgroundService
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        if (now - LastEmoji < TimeSpan.FromMinutes(15))
+        var minutesSinceLast = (now - LastEmoji).TotalMinutes;
+        if (minutesSinceLast < 1)
             return;
 
-        if (Random.Shared.NextDouble() < 0.75) // 25% chance to update emotes
+        double chance = CalculateChanceToReact((int)minutesSinceLast);
+        if (Random.Shared.NextDouble() > chance)
             return;
 
         LastEmoji = now;
