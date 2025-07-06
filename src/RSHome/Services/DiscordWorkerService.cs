@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,10 @@ public class DiscordWorkerService : BackgroundService
     private IConfigService Config { get; init; }
     private ISqliteService SqliteService { get; init; }
     private OpenAIService OpenAIService { get; init; }
+
+    private Lazy<IDictionary<string, GuildEmote>> Emotes { get; init; }
+
+    private Lazy<string> EmojiJsonList { get; init; }
 
     public bool IsRunning { get; private set; }
 
@@ -44,6 +49,7 @@ public class DiscordWorkerService : BackgroundService
 
     private ConcurrentQueue<string> StatusMessages = new();
     private DateTimeOffset LastStatusUpdate = DateTimeOffset.MinValue;
+    private DateTimeOffset LastEmoji = DateTimeOffset.MinValue;
     private string? CurrentActivity = null;
 
     internal const string GENERIC_INSTRUCTION = $"""
@@ -66,17 +72,40 @@ public class DiscordWorkerService : BackgroundService
         Jede Meldung soll maximal 5 Worte lang sein, formattiere das Ergebnis als Json.
         """;
 
+    internal string REACTION_INSTRUCTION(string emojiList) => $"""
+        {GENERIC_INSTRUCTION}
+        Generiere ein Reaction-Emoji für die letzte Nachricht, die du erhalten hast.
+        Liefere deine Reaktion direkt, ohne Formattierung, Anführungszeichen oder ähnliches, zum Beispiel: smart
+        Verwende entweder ein beliebiges Unicode-Emoji oder eines aus der folgenden Json-Liste:
+        {emojiList}
+        In diesem Chat bist du der Assistent. Die Nachrichten in der Chathistorie enthalten den Benutzernamen als Kontext im folgenden Format vorangestellt: `[[Name]]:`.
+        """;
+
     public DiscordWorkerService(ILogger<DiscordWorkerService> logger, IConfigService config, ISqliteService sqliteService, OpenAIService openAIService)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Config = config ?? throw new ArgumentNullException(nameof(config));
         SqliteService = sqliteService ?? throw new ArgumentNullException(nameof(sqliteService));
         OpenAIService = openAIService ?? throw new ArgumentNullException(nameof(openAIService));
+        Emotes = new(() =>
+        {
+            var emotes = Client.Guilds.SelectMany(g => g.Emotes)
+                .Where(e => e.IsAvailable == true)
+                .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(v => v.Key, v => v.First(), StringComparer.OrdinalIgnoreCase);
+            return emotes;
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        EmojiJsonList = new(() =>
+        {
+            var emotes = Emotes.Value.Select(e => e.Key).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+            return JsonSerializer.Serialize(emotes);
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if(!Config.DiscordEnable)
+        if (!Config.DiscordEnable)
         {
             Logger.LogWarning("Discord is disabled.");
             return;
@@ -141,8 +170,8 @@ public class DiscordWorkerService : BackgroundService
                     .WithDescription("Rolls a random number.")
                     .AddOption("range", ApplicationCommandOptionType.String, "One or two numbers separated by a space or slash.", isRequired: false);
                 await _client.CreateGlobalApplicationCommandAsync(commandBuilder.Build()).ConfigureAwait(false);
-                
-                Logger.LogWarning("Created slash command: {CommandName}", commandName);
+
+                Logger.LogInformation("Created slash command: {CommandName}", commandName);
             }
         }
         catch (Exception ex)
@@ -254,7 +283,7 @@ public class DiscordWorkerService : BackgroundService
         var cachedChannel = TextChannels.FirstOrDefault(c => c.Id == arg.Channel.Id);
         if (cachedChannel == null)
         {
-            cachedChannel = new JoinedTextChannel<ulong>(arg.Channel.Id, arg.Channel.Name,  await GetChannelUsers(arg.Channel).ConfigureAwait(false));
+            cachedChannel = new JoinedTextChannel<ulong>(arg.Channel.Id, arg.Channel.Name, await GetChannelUsers(arg.Channel).ConfigureAwait(false));
             Cache.Channels = TextChannels.Add(cachedChannel); // TODO: This may add duplicates, but since it's only a cache it should not matter
         }
 
@@ -272,7 +301,7 @@ public class DiscordWorkerService : BackgroundService
             cachedChannel.Users = cachedChannel.Users.Add(cachedUser);
         }
 
-        if(string.IsNullOrWhiteSpace(arg.Content))
+        if (string.IsNullOrWhiteSpace(arg.Content))
             return; // ignore images and similar for now
 
         string sanitizedMessage = ReplaceDiscordTags(arg, cachedChannel);
@@ -288,7 +317,17 @@ public class DiscordWorkerService : BackgroundService
         if (IsInDialogueMode)
             Interlocked.Decrement(ref RemainingDialogueMessages);
         else if (!ShouldRespond(arg))
+        {
+            // If we do not respond, we may want to handle reactions like coffee or similar
+            _ = Task.Run(() => HandleReactionsAsync(arg)).ContinueWith(task =>
+            {
+                if (task.Exception != null)
+                {
+                    Logger.LogError(task.Exception, "An error occurred while emoji for a message. Message: {Message}", arg.Content);
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
             return;
+        }
 
         await arg.Channel.TriggerTypingAsync().ConfigureAwait(false);
         var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 12).ConfigureAwait(false);
@@ -322,7 +361,7 @@ public class DiscordWorkerService : BackgroundService
         DateTimeOffset now = DateTimeOffset.UtcNow;
         if (now - LastStatusUpdate < TimeSpan.FromMinutes(120))
             return;
-    
+
         LastStatusUpdate = now;
         if (StatusMessages.IsEmpty)
         {
@@ -332,7 +371,7 @@ public class DiscordWorkerService : BackgroundService
                 StatusMessages.Enqueue(msg);
             }
         }
-    
+
         var activity = StatusMessages.TryDequeue(out var statusMessage) ? statusMessage : null;
         CurrentActivity = activity;
         await Client.SetCustomStatusAsync(activity).ConfigureAwait(false);
@@ -362,7 +401,7 @@ public class DiscordWorkerService : BackgroundService
         {
             Logger.LogWarning("OpenAI did not return a valid 'values' array for status messages: {Response}", response);
         }
-        
+
         return statusMessages;
     }
 
@@ -441,7 +480,7 @@ public class DiscordWorkerService : BackgroundService
         return message;
     }
 
-    internal async Task StartDialogueAsync(ulong channelId,  ulong userId, int messagesCount)
+    internal async Task StartDialogueAsync(ulong channelId, ulong userId, int messagesCount)
     {
         if (IsInDialogueMode)
         {
@@ -500,15 +539,15 @@ public class DiscordWorkerService : BackgroundService
     private async Task InitializeCache()
     {
         ChannelUserCache<ulong> cache = new();
-        foreach(var server in Client.Guilds)
+        foreach (var server in Client.Guilds)
         {
             await server.DownloadUsersAsync().ConfigureAwait(false);
-            foreach(var channel in server.Channels)
+            foreach (var channel in server.Channels)
             {
-                if(channel.ChannelType == ChannelType.Text)
+                if (channel.ChannelType == ChannelType.Text)
                 {
                     cache.Channels = cache.Channels.Add(
-                        new(channel.Id, $"{server.Name} -> {channel.Name}",  
+                        new(channel.Id, $"{server.Name} -> {channel.Name}",
                             await GetChannelUsers(channel).ConfigureAwait(false)));
                 }
             }
@@ -532,5 +571,74 @@ public class DiscordWorkerService : BackgroundService
         var displayName = GetDisplayName(user);
         var openAIName = OpenAIService.IsValidName(displayName) ? displayName : OpenAIService.SanitizeName(displayName);
         return new ChannelUser<ulong>(user.Id, displayName, openAIName);
+    }
+
+    private static readonly ImmutableHashSet<string> CoffeeKeywords = ImmutableHashSet.Create(
+        StringComparer.OrdinalIgnoreCase,
+        "moin",
+        "hi",
+        "morgen",
+        "morgn",
+        "guten morgen",
+        "servus",
+        "servas",
+        "dere",
+        "oida",
+        "porst",
+        "prost",
+        "grias di",
+        "gude",
+        "spinotwachtldroha",
+        "scheipi",
+        "heisl",
+        "gschissana",
+        "christkindl");
+
+    private async Task HandleReactionsAsync(SocketMessage arg)
+    {
+        if (CoffeeKeywords.Contains(arg.Content.Trim()))
+        {
+            await arg.AddReactionAsync(new Emoji("\u2615")).ConfigureAwait(false); // Coffee emoji
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (now - LastStatusUpdate < TimeSpan.FromMinutes(15))
+            return;
+
+        if (Random.Shared.NextDouble() > 0.75) // 25% chance to update emotes
+            return;
+
+        LastStatusUpdate = now;
+        var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 4).ConfigureAwait(false);
+        var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
+        var reaction = await OpenAIService.GenerateResponseAsync(REACTION_INSTRUCTION(EmojiJsonList.Value), messages, OpenAIService.PlainTextWithNoToolsOptions).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(reaction))
+        {
+            Logger.LogWarning("OpenAI did not return a reaction for the message: {Message}", arg.Content.Substring(0, Math.Min(arg.Content.Length, 100)));
+            return; // may be rate limited 
+        }
+
+        try
+        {
+            if (Emotes.Value.TryGetValue(reaction, out var guildEmote))
+            {
+                await arg.AddReactionAsync(guildEmote).ConfigureAwait(false);
+                return;
+            }
+
+            // Try to add as unicode emoji
+            if (!Emoji.TryParse(reaction, out var emoji))
+            {
+                Logger.LogWarning("Could not parse emoji from reaction: {Reaction}", reaction);
+                return;
+            }
+
+            await arg.AddReactionAsync(emoji).ConfigureAwait(false);
+        }
+        catch
+        {
+            Logger.LogWarning("Could not add reaction: {Reaction}", reaction);
+        }
     }
 }

@@ -132,6 +132,16 @@ public class OpenAIService
         ToolChoice = ResponseToolChoice.CreateAutoChoice(),
     };
 
+    internal static readonly ResponseCreationOptions PlainTextWithNoToolsOptions = new()
+    {
+        MaxOutputTokenCount = 50,
+        StoredOutputEnabled = false,
+        TextOptions = new ResponseTextOptions
+        {
+            TextFormat = ResponseTextFormat.CreateTextFormat()
+        }
+    };
+
     public async Task<string?> GenerateResponseAsync(string systemPrompt, IEnumerable<AIMessage> inputs, ResponseCreationOptions? options = null)
     {
         if (!RateLimiter.Leak())

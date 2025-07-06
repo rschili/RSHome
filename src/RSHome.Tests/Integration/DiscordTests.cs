@@ -27,7 +27,7 @@ public class DiscordTests
         config.OpenAiApiKey.Returns(openAiKey);
         config.SqliteDbPath.Returns(":memory:"); // Use in-memory database for testing
         var sql = Substitute.For<ISqliteService>();
-        
+
         var toolService = Substitute.For<IToolService>();
         var aiService = new OpenAIService(config, NullLogger<OpenAIService>.Instance, toolService);
 
@@ -35,9 +35,10 @@ public class DiscordTests
 
         var statusMessages = await discordService.CreateNewStatusMessages();
         await Assert.That(statusMessages).IsNotNull();
-        await Assert.That(statusMessages).IsNotEmpty(); 
+        await Assert.That(statusMessages).IsNotEmpty();
         var logger = TestContext.Current?.GetDefaultLogger();
         if (logger != null)
             await logger.LogInformationAsync($"Response: {string.Join("\n", statusMessages)}");
     }
+
 }

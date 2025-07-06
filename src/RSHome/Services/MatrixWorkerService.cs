@@ -135,6 +135,7 @@ public class MatrixWorkerService : BackgroundService
 
         try
         {
+            //TODO: Instead of using timestamp we may use a combination of limited/prev_batch and next to tell if this is new or not
             var age = DateTimeOffset.Now - message.Timestamp; // filter the message spam we receive from the server at start
             if (age.TotalSeconds > 30)
                 return;
