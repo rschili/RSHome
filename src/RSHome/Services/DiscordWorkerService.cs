@@ -603,13 +603,13 @@ public class DiscordWorkerService : BackgroundService
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        if (now - LastStatusUpdate < TimeSpan.FromMinutes(15))
+        if (now - LastEmoji < TimeSpan.FromMinutes(15))
             return;
 
         if (Random.Shared.NextDouble() > 0.75) // 25% chance to update emotes
             return;
 
-        LastStatusUpdate = now;
+        LastEmoji = now;
         var history = await SqliteService.GetLastDiscordMessagesForChannelAsync(arg.Channel.Id, 4).ConfigureAwait(false);
         var messages = history.Select(message => new AIMessage(message.IsFromSelf, message.Body, message.UserLabel)).ToList();
         var reaction = await OpenAIService.GenerateResponseAsync(REACTION_INSTRUCTION(EmojiJsonList.Value), messages, OpenAIService.PlainTextWithNoToolsOptions).ConfigureAwait(false);
