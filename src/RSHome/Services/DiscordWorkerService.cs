@@ -606,7 +606,7 @@ public class DiscordWorkerService : BackgroundService
         if (now - LastEmoji < TimeSpan.FromMinutes(15))
             return;
 
-        if (Random.Shared.NextDouble() > 0.75) // 25% chance to update emotes
+        if (Random.Shared.NextDouble() < 0.75) // 25% chance to update emotes
             return;
 
         LastEmoji = now;
