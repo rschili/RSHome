@@ -71,10 +71,10 @@ public class MatrixWorkerService : BackgroundService
             return;
         }
 
-        const int maxRetries = 5; // Maximum number of retries
+        const int maxRetries = 10; // Maximum number of retries
         int retryCount = 0;       // Current retry attempt
         const int initialDelay = 5000;         // Initial delay in milliseconds
-        const int retryDelayFactor = 4; // Factor to increase delay
+        const int retryDelayFactor = 3; // Factor to increase delay
         int currentDelay = initialDelay; // Current delay
 
         while (!stoppingToken.IsCancellationRequested)
