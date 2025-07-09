@@ -83,14 +83,14 @@ public class OpenAIService
     );
 
     private const string CAR_TOOL_NAME = "car_status";
-        private static readonly ResponseTool carStatusTool = ResponseTool.CreateFunctionTool
-    (
-        functionName: CAR_TOOL_NAME,
-        functionDescription: "Get status of the car of the user krael aka noppel (charge, range, doors, etc.)",
-        functionParameters: BinaryData.FromBytes("""
+    private static readonly ResponseTool carStatusTool = ResponseTool.CreateFunctionTool
+(
+    functionName: CAR_TOOL_NAME,
+    functionDescription: "Get status of the car of the user krael aka noppel (charge, range, doors, etc.)",
+    functionParameters: BinaryData.FromBytes("""
             {}
             """u8.ToArray())
-    );
+);
 
 
     private static readonly ResponseCreationOptions DefaultOptions = new()
@@ -198,7 +198,7 @@ public class OpenAIService
         var response = result.Value;
         List<FunctionCallResponseItem> functionCalls = [.. response.OutputItems.Where(item => item is FunctionCallResponseItem).Cast<FunctionCallResponseItem>()];
         List<WebSearchCallResponseItem> webSearchCalls = [.. response.OutputItems.Where(item => item is WebSearchCallResponseItem).Cast<WebSearchCallResponseItem>()];
-        if(webSearchCalls.Count > 0)
+        if (webSearchCalls.Count > 0)
         {
             foreach (var webSearchCall in webSearchCalls)
             {
@@ -233,7 +233,7 @@ public class OpenAIService
             Logger.LogError("OpenAI call finished with an error: {Error}. Depth: {Depth}. Total Token Count: {TokenCount}.", output, depth, response.Usage.TotalTokenCount);
             return $"Fehler bei der OpenAI-Antwort: {output}";
         }
-        
+
         Logger.LogError($"OpenAI call returned no output or error. Depth: {depth}. Total Token Count: {response.Usage.TotalTokenCount}");
         return "Keine Antwort von OpenAI erhalten.";
     }
