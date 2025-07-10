@@ -1,11 +1,7 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
-using System.Security.Cryptography.X509Certificates;
-using RSHome.Services;
-using Microsoft.AspNetCore.Builder;
-using System.Text;
 using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.DataProtection;
+using RSHome.Services;
 
 Console.WriteLine($"Current user: {Environment.UserName}");
 Console.WriteLine("Loading variables...");
@@ -15,17 +11,6 @@ var cultureInfo = new CultureInfo("de-DE");
 CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
 CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 Console.WriteLine($"Current culture: {CultureInfo.CurrentCulture.Name}");
-
-string dbPath = config.SqliteDbPath;
-string dbDirectory = Path.GetDirectoryName(dbPath) ?? throw new InvalidOperationException("Database path is invalid or null.");
-if (!Directory.Exists(dbDirectory))
-{
-    Directory.CreateDirectory(dbDirectory);
-}
-using (StreamWriter sw = new(Path.Combine(dbDirectory, "log.txt"), append: true))
-{
-    sw.WriteLine($"Starting RSHome at {DateTime.UtcNow}");
-}
 
 var builder = WebApplication.CreateBuilder(args);
 foreach (var s in builder.Configuration.Sources)
@@ -50,19 +35,11 @@ builder.Logging
     .SetMinimumLevel(LogLevel.Warning)
     .AddSeq(config.SeqUrl, config.SeqApiKey);
 
-var sqliteService = await SqliteService.CreateAsync(config).ConfigureAwait(false);
 builder.Services
     .AddSingleton<IConfigService>(config)
     .AddSingleton<SecurityService>()
     .AddSingleton<WordleService>()
     .AddHttpClient()
-    .AddSingleton<ISqliteService>(sqliteService)
-    .AddSingleton<IToolService, ToolService>()
-    .AddSingleton<OpenAIService>()
-    .AddSingleton<DiscordWorkerService>()
-    .AddHostedService(p => p.GetRequiredService<DiscordWorkerService>())
-    .AddSingleton<MatrixWorkerService>()
-    .AddHostedService(p => p.GetRequiredService<MatrixWorkerService>())
     .AddRazorPages(options => {
         options.RootDirectory = "/Pages";
         options.Conventions.AuthorizeFolder("/", "admin");

@@ -1,11 +1,11 @@
-﻿using RSMatrix.Http;
+﻿using RSFlowControl;
 
 namespace RSHome.Services;
 
 public class SecurityService
 {
     private readonly IConfigService _config;
-    private readonly LeakyBucketRateLimiter _rateLimiter = new(3, 10);
+    private readonly LeakyBucket _rateLimiter = new(3, 10);
     private readonly ILogger<SecurityService> _logger;
 
     public SecurityService(IConfigService config, ILogger<SecurityService> logger)
