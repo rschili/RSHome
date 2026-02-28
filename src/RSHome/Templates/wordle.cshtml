@@ -1,0 +1,60 @@
+@inherits RSHome.Services.RSHomeTemplateBase<RSHome.Endpoints.WordleViewModel>
+@{
+    Layout = "_layout";
+    ViewBag.Title = "Wordle";
+    ViewBag.Theme = Model.Theme;
+    ViewBag.Authenticated = Model.Authenticated;
+}
+
+<article>
+<h1>Wordle</h1>
+<p>You know the rules.</p>
+
+<div class="grid">
+    @foreach (var result in Model.Results)
+    {
+        if (result.Color != null)
+        {
+            <div class="cell" style="background-color: @result.Color;">@result.Letter</div>
+        }
+        else
+        {
+            <div class="cell">@result.Letter</div>
+        }
+    }
+</div>
+
+@if (Model.Error != null)
+{
+    <p class="wordle-error">@Model.Error</p>
+}
+
+@if (Model.State == GameState.InProgress)
+{
+<form method="post" action="/wordle">
+    <fieldset>
+        <input type="text" name="Input" value="" placeholder="input" autofocus maxlength="5" />
+        <button type="submit">Try!</button>
+    </fieldset>
+</form>
+}
+else if (Model.State == GameState.Won || Model.State == GameState.Lost)
+{
+<fieldset>
+    <button type="button" onclick="copyToClipboard()">Copy Summary</button>
+    <textarea id="summary" rows="7" cols="40" readonly>@Model.Summary</textarea>
+</fieldset>
+
+<script>
+function copyToClipboard() {
+    var summary = document.getElementById("summary");
+    summary.select();
+    summary.setSelectionRange(0, 999);
+    navigator.clipboard.writeText(summary.value).catch(function() {
+        document.execCommand("copy");
+    });
+    alert("Summary copied to clipboard");
+}
+</script>
+}
+</article>

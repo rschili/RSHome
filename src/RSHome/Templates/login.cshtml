@@ -1,0 +1,26 @@
+@inherits RSHome.Services.RSHomeTemplateBase<RSHome.Endpoints.LoginPageModel>
+@{
+    Layout = "_layout";
+    ViewBag.Title = "Login";
+    ViewBag.Theme = "auto";
+    ViewBag.Authenticated = false;
+}
+
+<div class="auth-box">
+    <h1>Login</h1>
+
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+
+    <form method="post" action="/login">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autofocus autocomplete="current-password" />
+
+        <button type="submit">Login</button>
+    </form>
+</div>

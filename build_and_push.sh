@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to your .env file
-ENV_FILE=".env"
+ENV_FILE="../.env"
 
 # Define variables
 IMAGE_NAME="rshome:latest"

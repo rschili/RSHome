@@ -1,9 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace RSHome.Services;
 
 public interface IConfigService
@@ -11,7 +5,6 @@ public interface IConfigService
     string SeqApiKey { get; }
     string SeqUrl { get; }
     string WebLoginHash { get; }
-    string WebKeyStore { get; }
     string CertificatePath { get; }
     string PfxPassword { get; }
 }
@@ -22,7 +15,6 @@ public enum EnvVar
     SEQ_API_KEY,
     SEQ_URL,
     WEB_LOGIN_HASH,
-    WEB_KEY_STORE,
     CERTIFICATE_PATH,
     PFX_PASSWORD,
 }
@@ -34,7 +26,6 @@ public class ConfigService : IConfigService
     public string SeqApiKey => _variables[EnvVar.SEQ_API_KEY];
     public string SeqUrl => _variables[EnvVar.SEQ_URL];
     public string WebLoginHash => _variables[EnvVar.WEB_LOGIN_HASH];
-    public string WebKeyStore => _variables[EnvVar.WEB_KEY_STORE];
     public string CertificatePath => _variables[EnvVar.CERTIFICATE_PATH];
     public string PfxPassword => _variables[EnvVar.PFX_PASSWORD];
 

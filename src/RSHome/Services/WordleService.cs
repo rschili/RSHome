@@ -1,5 +1,15 @@
 namespace RSHome.Services;
 
+public enum GameState
+{
+    InProgress,
+    Won,
+    Lost,
+    Invalid
+}
+
+public record WordleGridCell(char Letter, string? Color);
+
 
 public class WordleService
 {
